@@ -6,7 +6,7 @@
 |------|------|--------|--------|-----------|-------|
 | S01 | [step-01.md](step-01.md) | done | 1 | 72618fb | passed first review |
 | S02 | [step-02.md](step-02.md) | done | 2 | 9643b58 | round 1: unwrapped ValueError/RecursionError from json.loads, fixed |
-| S03 | [step-03.md](step-03.md) | done | 2 | COMMIT | round 1: missing PEP 8 blank line in test_first_save.py, fixed |
+| S03 | [step-03.md](step-03.md) | done | 2 | bab2ca9 | round 1: missing PEP 8 blank line in test_first_save.py, fixed |
 | S04 | [step-04.md](step-04.md) | pending | 0 | - | not selected in this run |
 | S05 | [step-05.md](step-05.md) | pending | 0 | - | not selected in this run |
 
