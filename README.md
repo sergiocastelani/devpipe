@@ -56,14 +56,15 @@ uv run python -m devpipe
 uv run pytest
 ```
 
-Tests live in `tests/` and use [pytest-qt](https://pytest-qt.readthedocs.io/)
+Tests live in `tests/`, in folders that mirror the code layers (`models/`,
+`persistence/`, `services/`, `views/`), and use [pytest-qt](https://pytest-qt.readthedocs.io/)
 (the `qtbot` fixture) to build widgets without showing them on screen.
 
 Useful variants:
 
 ```sh
 uv run pytest -v                          # list each test
-uv run pytest tests/test_start_tab.py     # one file
+uv run pytest tests/views/test_start_tab.py  # one file
 uv run pytest -k start_tab                # tests whose name matches
 ```
 
@@ -72,4 +73,13 @@ offscreen:
 
 ```sh
 QT_QPA_PLATFORM=offscreen uv run pytest
+```
+
+## Check the layer rules
+
+The code is layered (see `docs/architecture.md`). import-linter checks that
+imports only point down the stack:
+
+```sh
+uv run lint-imports
 ```

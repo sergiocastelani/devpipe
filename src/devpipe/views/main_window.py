@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QMainWindow, QTabWidget
 
-from devpipe.start_tab import StartTab
+from devpipe.views.start_tab import StartTab
 
 
 class MainWindow(QMainWindow):

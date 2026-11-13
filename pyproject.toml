@@ -9,12 +9,13 @@ dependencies = [
 ]
 
 [project.scripts]
-devpipe = "devpipe.__main__:main"
+devpipe = "devpipe.app:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-qt>=4.4",
+    "import-linter>=2.1",
 ]
 
 [build-system]
@@ -27,3 +28,35 @@ packages = ["src/devpipe"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
+# Test folders mirror the layers; importlib mode lets test files share
+# basenames across folders without __init__.py files.
+addopts = "--import-mode=importlib"
+
+# Layer rules (docs/architecture.md). Check with: uv run lint-imports
+[tool.importlinter]
+root_packages = ["devpipe"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers: app -> views -> services -> persistence -> models"
+type = "layers"
+layers = [
+    "devpipe.__main__",
+    "devpipe.app",
+    "devpipe.views",
+    "devpipe.services",
+    "devpipe.persistence",
+    "devpipe.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "Views go through services, never persistence"
+type = "forbidden"
+source_modules = ["devpipe.views"]
+forbidden_modules = ["devpipe.persistence"]
+
+[[tool.importlinter.contracts]]
+name = "Only views and app use Qt"
+type = "forbidden"
+source_modules = ["devpipe.services", "devpipe.persistence", "devpipe.models"]
+forbidden_modules = ["PySide6"]

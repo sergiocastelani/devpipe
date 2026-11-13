@@ -1,5 +1,5 @@
-from devpipe.main_window import MainWindow
-from devpipe.start_tab import StartTab
+from devpipe.views.main_window import MainWindow
+from devpipe.views.start_tab import StartTab
 
 
 def test_main_window_opens_with_a_start_tab(qtbot):
