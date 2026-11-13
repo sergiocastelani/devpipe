@@ -18,6 +18,11 @@ control files in `<worktree>/.devpipe/<feature-name>/`.
   the app installs into the agent's skills folder; do not change their
   behavior as a side effect of app work.
 
+## Architecture
+The code is layered: `views -> services -> persistence -> models`, wired
+together in `app.py`. Read `docs/architecture.md` before adding or moving
+code.
+
 ## Tooling
 - Package and env management: uv (`pyproject.toml`).
 - Layout: code in `src/devpipe/`, tests in `tests/` (pytest).
