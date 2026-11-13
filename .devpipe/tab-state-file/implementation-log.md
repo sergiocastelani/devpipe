@@ -26,8 +26,8 @@ Deviations from a step file's implementation suggestions, as reported by its imp
 
 ## Checks pending for the user
 `needs-human` checks, collected from each step and verified by the user only after the run (section 4).
-- (S03) Save dialog opens: with no `last_state_folder` in `config.json`, run `uv run devpipe`, type "New Feature", click Save; the native Save dialog opens in the home folder suggesting `new-feature.json` with the "JSON files (*.json)" filter. — pending
-- (S03) Cancel: in that dialog, cancel; the tab is unchanged and Save is still enabled. — pending
-- (S03) Confirm: in that dialog, confirm into a folder; `new-feature.json` exists with the three fields, the tab is titled `new-feature` with the full path as tooltip, the input shows `new-feature` disabled, Save is disabled, and the two big buttons are enabled. — pending
-- (S03) Duplicate: with that saved tab, click "+", type "Other", click Save; the dialog opens in the same folder; pick `new-feature.json`; a warning says the file is already open and the new tab stays "New pipeline". — pending
-- (S03) Write error: create `locked.json` beforehand and mark it read-only (`attrib +r locked.json`); name a new tab, click Save, pick `locked.json` and confirm the overwrite; a "Cannot save state file" warning shows the path and the reason, and the tab stays unsaved with the typed name kept. — pending
+- (S03) Save dialog opens: with no `last_state_folder` in `config.json`, run `uv run devpipe`, type "New Feature", click Save; the native Save dialog opens in the home folder suggesting `new-feature.json` with the "JSON files (*.json)" filter. — pass
+- (S03) Cancel: in that dialog, cancel; the tab is unchanged and Save is still enabled. — pass
+- (S03) Confirm: in that dialog, confirm into a folder; `new-feature.json` exists with the three fields, the tab is titled `new-feature` with the full path as tooltip, the input shows `new-feature` disabled, Save is disabled, and the two big buttons are enabled. — pass
+- (S03) Duplicate: with that saved tab, click "+", type "Other", click Save; the dialog opens in the same folder; pick `new-feature.json`; a warning says the file is already open and the new tab stays "New pipeline". — pass
+- (S03) Write error: create `locked.json` beforehand and mark it read-only (`attrib +r locked.json`); name a new tab, click Save, pick `locked.json` and confirm the overwrite; a "Cannot save state file" warning shows the path and the reason, and the tab stays unsaved with the typed name kept. — pass
