@@ -9,6 +9,9 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from devpipe.persistence.config_repository import ConfigRepository
+from devpipe.persistence.tab_state_repository import TabStateRepository
+from devpipe.services.session_service import SessionService
+from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.views.main_window import MainWindow
 
@@ -18,7 +21,11 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
 
 def main() -> int:
     app = QApplication(sys.argv)
-    window_state = WindowStateService(ConfigRepository(CONFIG_PATH))
-    window = MainWindow(window_state)
+    config = ConfigRepository(CONFIG_PATH)
+    window = MainWindow(
+        WindowStateService(config),
+        TabStateService(TabStateRepository()),
+        SessionService(config),
+    )
     window.show_initial()
     return app.exec()

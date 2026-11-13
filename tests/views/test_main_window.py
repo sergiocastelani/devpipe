@@ -2,29 +2,21 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
+from devpipe.models.tab_state import TabState
 from devpipe.persistence.config_repository import ConfigRepository
-from devpipe.services.window_state_service import WindowStateService
-from devpipe.views.main_window import MainWindow
 from devpipe.views.pipeline_tab import PipelineTab
 
 
 @pytest.fixture
-def window_state(tmp_path):
-    return WindowStateService(ConfigRepository(tmp_path / "config.json"))
-
-
-@pytest.fixture
-def window(qtbot, window_state):
-    window = MainWindow(window_state)
-    qtbot.addWidget(window)
-    return window
+def window(make_window):
+    return make_window()
 
 
 class IdentityTab(PipelineTab):
     """PipelineTab whose identity the test can change."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, tab_states) -> None:
+        super().__init__(tab_states)
         self.title_text = "t1"
         self.tooltip_text = "p1"
 
@@ -35,8 +27,8 @@ class IdentityTab(PipelineTab):
         return self.tooltip_text
 
 
-def add_identity_tab(qtbot, window):
-    tab = IdentityTab()
+def add_identity_tab(qtbot, window, tab_states):
+    tab = IdentityTab(tab_states)
     qtbot.addWidget(tab)
     return tab, window.add_pipeline_tab(tab)
 
@@ -126,17 +118,17 @@ def test_closing_unsaved_tabs_asks_nothing(qtbot, window, monkeypatch):
     assert window.isHidden()
 
 
-def test_add_pipeline_tab_uses_tab_identity(qtbot, window):
+def test_add_pipeline_tab_uses_tab_identity(qtbot, window, tab_states):
     current = window.tabs.currentIndex()
-    tab, index = add_identity_tab(qtbot, window)
+    tab, index = add_identity_tab(qtbot, window, tab_states)
     assert window.tabs.widget(index) is tab
     assert window.tabs.tabText(index) == "t1"
     assert window.tabs.tabToolTip(index) == "p1"
     assert window.tabs.currentIndex() == current
 
 
-def test_identity_changed_refreshes_tab_text(qtbot, window):
-    tab, _ = add_identity_tab(qtbot, window)
+def test_identity_changed_refreshes_tab_text(qtbot, window, tab_states):
+    tab, _ = add_identity_tab(qtbot, window, tab_states)
     tab.title_text = "t2"
     tab.tooltip_text = "p2"
     tab.identity_changed.emit()
@@ -145,8 +137,8 @@ def test_identity_changed_refreshes_tab_text(qtbot, window):
     assert window.tabs.tabToolTip(index) == "p2"
 
 
-def test_identity_changed_after_close_is_ignored(qtbot, window):
-    tab, index = add_identity_tab(qtbot, window)
+def test_identity_changed_after_close_is_ignored(qtbot, window, tab_states):
+    tab, index = add_identity_tab(qtbot, window, tab_states)
     window.close_tab(index)
     tab.title_text = "t2"
     tab.tooltip_text = "p2"
@@ -157,17 +149,36 @@ def test_identity_changed_after_close_is_ignored(qtbot, window):
 
 
 @pytest.mark.parametrize("maximized", [True, False])
-def test_close_saves_and_next_launch_restores_maximized(qtbot, window_state, maximized):
-    first = MainWindow(window_state)
-    qtbot.addWidget(first)
+def test_close_saves_and_next_launch_restores_maximized(
+    qtbot, make_window, tmp_path, maximized
+):
+    first = make_window()
     first.show_initial()
     if maximized:
         first.showMaximized()
     qtbot.waitUntil(lambda: first.isMaximized() == maximized)
     first.close()
-    assert window_state.was_maximized() is maximized
+    assert ConfigRepository(tmp_path / "config.json").load().window_maximized is maximized
 
-    second = MainWindow(window_state)
-    qtbot.addWidget(second)
+    second = make_window()
     second.show_initial()
     qtbot.waitUntil(lambda: second.isMaximized() == maximized)
+
+
+def test_add_saved_tab_adds_and_selects_a_saved_tab(window, tmp_path):
+    path = tmp_path / "a.json"
+    tab = window.add_saved_tab(path, TabState("a"))
+    assert window.tabs.count() == 2
+    assert window.tabs.currentWidget() is tab
+    index = window.tabs.indexOf(tab)
+    assert window.tabs.tabText(index) == "a"
+    assert window.tabs.tabToolTip(index) == str(path)
+    assert not path.exists()
+
+
+def test_find_tab_returns_index_of_saved_tab(window, tmp_path):
+    window.add_saved_tab(tmp_path / "a.json", TabState("a"))
+    assert window.tabs.widget(0).state_path is None
+    assert window.find_tab(tmp_path / "a.json") == 1
+    assert window.find_tab(tmp_path / "x" / ".." / "a.json") == 1
+    assert window.find_tab(tmp_path / "b.json") is None
