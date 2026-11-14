@@ -21,12 +21,18 @@ Persistence and infrastructure are siblings: they never import each other.
 
 Layout:
 
+<!-- Do not edit this section unless there is a structural change in the
+     layout (e.g. a layer, folder or top-level module is added, moved or
+     removed). -->
+
 ```
 src/devpipe/
 ├── __main__.py      # entry point; calls app.main()
 ├── app.py
 ├── infrastructure/
-│   └── git_worktrees.py   # runs git to create worktrees
+│   ├── git_worktrees.py      # runs git to create worktrees
+│   ├── windows_terminals.py  # Terminals on Windows: PowerShell console windows
+│   └── console_input.py      # helper script: types text into another process's console
 ├── models/
 ├── persistence/
 ├── services/
@@ -37,7 +43,8 @@ src/devpipe/
     ├── start_panel.py         # first panel: feature name, Save, start buttons
     └── worktree_worker.py     # background thread running one worktree creation
 
-tests/               # mirrors the layers: models/, persistence/, services/, views/
+tests/               # mirrors the layers: models/, persistence/, services/, infrastructure/, views/
+                     # tests/infrastructure opens real windows: opt in with DEVPIPE_TERMINAL_TESTS=1
 ```
 
 Layer rules are checked by import-linter: `uv run lint-imports`.
