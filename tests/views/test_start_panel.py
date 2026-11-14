@@ -1,9 +1,15 @@
 import pytest
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QVBoxLayout
 
-from devpipe.views.start_panel import StartPanel
+from devpipe.views.start_panel import (
+    BIG_BUTTON_MIN_HEIGHT,
+    BIG_BUTTON_MIN_WIDTH,
+    BIG_BUTTON_POINT_SIZE,
+    BIG_BUTTON_SPACING,
+    StartPanel,
+)
 
 
 def make_panel(qtbot):
@@ -43,6 +49,16 @@ def opened_urls(monkeypatch):
     return opened
 
 
+def big_button_column(panel) -> QVBoxLayout:
+    """The child layout of the panel's root layout that holds open_button."""
+    root = panel.layout()
+    for index in range(root.count()):
+        column = root.itemAt(index).layout()
+        if column is not None and column.indexOf(panel.open_button) >= 0:
+            return column
+    pytest.fail("no child layout holds open_button")
+
+
 def item_texts(panel):
     worktrees = panel.worktrees_list
     return [worktrees.item(i).text() for i in range(worktrees.count())]
@@ -60,6 +76,8 @@ def test_new_panel_is_unsaved_and_empty(qtbot):
     assert not panel.save_button.isEnabled()
     assert not panel.open_button.isEnabled()
     assert not panel.create_button.isEnabled()
+    assert not panel.new_worktree_button.isEnabled()
+    assert panel.new_worktree_button.text() == "Create new worktree"
     assert panel.save_button.text() == "Save"
     assert panel.open_button.text() == "Open a pipeline"
     assert panel.create_button.text() == "Create a pipeline"
@@ -72,6 +90,7 @@ def test_typing_a_name_previews_slug_and_enables_only_save(qtbot):
     assert panel.save_button.isEnabled()
     assert not panel.open_button.isEnabled()
     assert not panel.create_button.isEnabled()
+    assert not panel.new_worktree_button.isEnabled()
 
 
 def test_accented_name_previews_slug(qtbot):
@@ -116,6 +135,7 @@ def test_show_saved_switches_to_saved_mode(qtbot):
     assert not panel.save_button.isEnabled()
     assert panel.open_button.isEnabled()
     assert panel.create_button.isEnabled()
+    assert panel.new_worktree_button.isEnabled()
     assert not panel.name_input.isHidden()
     assert not panel.save_button.isHidden()
 
@@ -129,6 +149,42 @@ def test_saved_mode_keeps_save_disabled(qtbot):
     assert not panel.save_button.isEnabled()
     assert panel.open_button.isEnabled()
     assert panel.create_button.isEnabled()
+    assert panel.new_worktree_button.isEnabled()
+
+
+def test_new_worktree_button_matches_open_button_format(qtbot):
+    panel = make_panel(qtbot)
+    expected_size = QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
+    assert panel.new_worktree_button.minimumSize() == panel.open_button.minimumSize() == expected_size
+    assert (
+        panel.new_worktree_button.font().pointSize()
+        == panel.open_button.font().pointSize()
+        == BIG_BUTTON_POINT_SIZE
+    )
+
+
+def test_new_worktree_button_is_first_in_centered_column(qtbot):
+    panel = make_panel(qtbot)
+    column = big_button_column(panel)
+    assert column.indexOf(panel.new_worktree_button) == 0
+    assert column.indexOf(panel.open_button) == 1
+    assert column.indexOf(panel.create_button) == 2
+    assert column.alignment() == Qt.AlignmentFlag.AlignCenter
+    assert column.spacing() == BIG_BUTTON_SPACING
+
+
+def test_new_worktree_click_emits_signal(qtbot):
+    panel = make_panel(qtbot)
+    panel.show_saved("x")
+    with qtbot.waitSignal(panel.new_worktree_requested, timeout=1000) as blocker:
+        qtbot.mouseClick(panel.new_worktree_button, Qt.MouseButton.LeftButton)
+    assert blocker.args == []
+
+
+def test_disabled_new_worktree_button_emits_nothing(qtbot):
+    panel = make_panel(qtbot)
+    with qtbot.assertNotEmitted(panel.new_worktree_requested):
+        qtbot.mouseClick(panel.new_worktree_button, Qt.MouseButton.LeftButton)
 
 
 def test_new_panel_hides_worktrees(qtbot):
