@@ -1,10 +1,24 @@
-"""First panel of a pipeline tab: feature name, Save, and the start buttons.
+"""First panel of a pipeline tab: feature name, Save, and the start buttons, and,
+at the bottom, the tab's worktree folders (double-click opens one in the file explorer).
 
 What "Open a pipeline" and "Create a pipeline" do is not decided yet.
 """
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from devpipe.models.feature_name import normalize_feature_name
 
@@ -17,6 +31,11 @@ BIG_BUTTON_MIN_HEIGHT = 90
 BIG_BUTTON_POINT_SIZE = 16
 BIG_BUTTON_SPACING = 24
 SLUG_FONT_POINT_DELTA = -1
+WORKTREES_LABEL_TEXT = "Worktrees"
+FOLDER_NOT_FOUND_TITLE = "Folder not found"
+FOLDER_NOT_FOUND_TEXT = "Folder not found: {path}"
+CANNOT_OPEN_FOLDER_TITLE = "Cannot open folder"
+CANNOT_OPEN_FOLDER_TEXT = "Cannot open folder: {path}"
 
 
 class StartPanel(QWidget):
@@ -38,6 +57,10 @@ class StartPanel(QWidget):
         self.create_button = self._big_button(CREATE_TEXT)
         self.open_button.setEnabled(False)
         self.create_button.setEnabled(False)
+        self.worktrees_label = QLabel(WORKTREES_LABEL_TEXT)
+        self.worktrees_list = QListWidget()
+        self.worktrees_list.setAccessibleName(WORKTREES_LABEL_TEXT)
+        self.worktrees_label.setBuddy(self.worktrees_list)
 
         name_row = QHBoxLayout()
         name_row.addWidget(self.name_input, 1)
@@ -53,10 +76,14 @@ class StartPanel(QWidget):
         layout.addLayout(name_row)
         layout.addWidget(self.slug_label)
         layout.addLayout(buttons, 1)
+        layout.addWidget(self.worktrees_label)
+        layout.addWidget(self.worktrees_list)
 
         self.name_input.textChanged.connect(self._on_name_changed)
         self.save_button.clicked.connect(self._on_save_clicked)
+        self.worktrees_list.itemDoubleClicked.connect(self._on_worktree_double_clicked)
         self._refresh_save_enabled()
+        self.show_worktrees([])
 
     def show_saved(self, feature_name: str) -> None:
         """Switch to saved mode (one-way): name fixed, Open and Create enabled."""
@@ -66,6 +93,28 @@ class StartPanel(QWidget):
         self.save_button.setEnabled(False)
         self.open_button.setEnabled(True)
         self.create_button.setEnabled(True)
+
+    def show_worktrees(self, paths: list[Path]) -> None:
+        """Replace the worktree list with `paths` (shown as str(path)), in order.
+
+        The label and the list are shown when `paths` is non-empty, hidden otherwise.
+        May be called any number of times; `paths` is not kept or modified.
+        """
+        self.worktrees_list.clear()
+        for path in paths:
+            self.worktrees_list.addItem(str(path))
+        visible = bool(paths)
+        self.worktrees_label.setVisible(visible)
+        self.worktrees_list.setVisible(visible)
+
+    def _on_worktree_double_clicked(self, item: QListWidgetItem) -> None:
+        """Open the entry's folder in the file explorer; warn when it does not exist or the OS cannot open it."""
+        path = Path(item.text())
+        if not path.is_dir():
+            QMessageBox.warning(self, FOLDER_NOT_FOUND_TITLE, FOLDER_NOT_FOUND_TEXT.format(path=path))
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+            QMessageBox.warning(self, CANNOT_OPEN_FOLDER_TITLE, CANNOT_OPEN_FOLDER_TEXT.format(path=path))
 
     def _on_name_changed(self, text: str) -> None:
         self._slug = normalize_feature_name(text)

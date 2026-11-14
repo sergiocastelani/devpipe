@@ -177,3 +177,33 @@ def test_save_as_writes_empty_worktrees(qtbot, tab_states, tmp_path):
     path = tmp_path / "x.json"
     assert tab.save_as(path, "x") is True
     assert read_json(path) == EXPECTED_FILE
+
+
+def worktree_texts(tab):
+    worktrees = tab.start_panel.worktrees_list
+    return [worktrees.item(i).text() for i in range(worktrees.count())]
+
+
+def test_apply_saved_shows_worktrees_on_start_panel(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    a = tmp_path / "wt" / "a"
+    b = tmp_path / "wt" / "b"
+    tab.apply_saved(tmp_path / "x.json", TabState("x", Panel.START, [a, b]))
+    assert worktree_texts(tab) == [str(a), str(b)]
+    assert not tab.start_panel.worktrees_label.isHidden()
+
+
+def test_apply_saved_without_worktrees_hides_list(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    path = tmp_path / "x.json"
+    tab.apply_saved(path, TabState("x", Panel.START, [tmp_path / "wt" / "a"]))
+    tab.apply_saved(path, TabState("x"))
+    assert worktree_texts(tab) == []
+    assert tab.start_panel.worktrees_list.isHidden()
+    assert tab.start_panel.worktrees_label.isHidden()
+
+
+def test_save_as_keeps_worktrees_hidden(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    assert tab.save_as(tmp_path / "x.json", "x") is True
+    assert tab.start_panel.worktrees_list.isHidden()

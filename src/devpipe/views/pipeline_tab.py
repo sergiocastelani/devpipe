@@ -73,6 +73,7 @@ class PipelineTab(QWidget):
         self._feature_name = state.feature_name
         self._worktrees = list(state.worktrees)
         self.start_panel.show_saved(state.feature_name)
+        self.start_panel.show_worktrees(state.worktrees)
         self._display(state.active_panel)
         self.identity_changed.emit()
 
