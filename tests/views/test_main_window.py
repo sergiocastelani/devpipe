@@ -15,8 +15,8 @@ def window(make_window):
 class IdentityTab(PipelineTab):
     """PipelineTab whose identity the test can change."""
 
-    def __init__(self, tab_states) -> None:
-        super().__init__(tab_states)
+    def __init__(self, tab_states, worktrees) -> None:
+        super().__init__(tab_states, worktrees)
         self.title_text = "t1"
         self.tooltip_text = "p1"
 
@@ -27,8 +27,8 @@ class IdentityTab(PipelineTab):
         return self.tooltip_text
 
 
-def add_identity_tab(qtbot, window, tab_states):
-    tab = IdentityTab(tab_states)
+def add_identity_tab(qtbot, window, tab_states, worktree_service):
+    tab = IdentityTab(tab_states, worktree_service)
     qtbot.addWidget(tab)
     return tab, window.add_pipeline_tab(tab)
 
@@ -118,17 +118,17 @@ def test_closing_unsaved_tabs_asks_nothing(qtbot, window, monkeypatch):
     assert window.isHidden()
 
 
-def test_add_pipeline_tab_uses_tab_identity(qtbot, window, tab_states):
+def test_add_pipeline_tab_uses_tab_identity(qtbot, window, tab_states, worktree_service):
     current = window.tabs.currentIndex()
-    tab, index = add_identity_tab(qtbot, window, tab_states)
+    tab, index = add_identity_tab(qtbot, window, tab_states, worktree_service)
     assert window.tabs.widget(index) is tab
     assert window.tabs.tabText(index) == "t1"
     assert window.tabs.tabToolTip(index) == "p1"
     assert window.tabs.currentIndex() == current
 
 
-def test_identity_changed_refreshes_tab_text(qtbot, window, tab_states):
-    tab, _ = add_identity_tab(qtbot, window, tab_states)
+def test_identity_changed_refreshes_tab_text(qtbot, window, tab_states, worktree_service):
+    tab, _ = add_identity_tab(qtbot, window, tab_states, worktree_service)
     tab.title_text = "t2"
     tab.tooltip_text = "p2"
     tab.identity_changed.emit()
@@ -137,8 +137,8 @@ def test_identity_changed_refreshes_tab_text(qtbot, window, tab_states):
     assert window.tabs.tabToolTip(index) == "p2"
 
 
-def test_identity_changed_after_close_is_ignored(qtbot, window, tab_states):
-    tab, index = add_identity_tab(qtbot, window, tab_states)
+def test_identity_changed_after_close_is_ignored(qtbot, window, tab_states, worktree_service):
+    tab, index = add_identity_tab(qtbot, window, tab_states, worktree_service)
     window.close_tab(index)
     tab.title_text = "t2"
     tab.tooltip_text = "p2"

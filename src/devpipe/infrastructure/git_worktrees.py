@@ -1,5 +1,8 @@
 """Create git worktrees by running the git executable (no Qt, no shell)."""
 
+import os
+import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -12,6 +15,8 @@ FALLBACK_DEFAULT_BRANCHES = ("main", "master")
 NOT_A_REPOSITORY_MESSAGE = "not a git repository"
 DEFAULT_BRANCH_NOT_FOUND_MESSAGE = "default branch not found"
 GIT_NOT_FOUND_MESSAGE = "git not found"
+BRANCH_REF = "refs/heads/{branch}"
+CANNOT_DELETE_FOLDER_MESSAGE = "cannot delete folder: {reason}"
 
 
 class SubprocessGitWorktrees:
@@ -25,10 +30,73 @@ class SubprocessGitWorktrees:
             source, "worktree", "add", "-b", branch, str(target), start_point
         )
         if completed.returncode != 0:
-            message = completed.stderr.strip()
-            raise GitWorktreeError(
-                message or f"git exited with code {completed.returncode}"
-            )
+            raise GitWorktreeError(self._failure_message(completed))
+
+    def branch_exists(self, source: Path, branch: str) -> bool:
+        """See GitWorktrees.branch_exists."""
+        self._check_repository(source)
+        return self._ref_exists(source, BRANCH_REF.format(branch=branch))
+
+    def is_worktree(self, source: Path, branch: str, target: Path) -> bool:
+        """See GitWorktrees.is_worktree."""
+        if not target.is_dir():
+            return False
+        ref = BRANCH_REF.format(branch=branch)
+        return any(
+            _same_folder(folder, target) and entry_ref == ref
+            for folder, entry_ref in self._worktree_entries(source)
+        )
+
+    def remove_worktree(self, source: Path, branch: str, target: Path, delete_branch: bool) -> None:
+        """See GitWorktrees.remove_worktree."""
+        entries = self._worktree_entries(source)
+        if any(_same_folder(folder, target) for folder, _ref in entries):
+            self._run_checked(source, "worktree", "remove", "--force", str(target))
+        self._run_checked(source, "worktree", "prune")
+        if target.is_dir():
+            try:
+                shutil.rmtree(target, onexc=_make_writable_and_retry)
+            except OSError as exc:
+                raise GitWorktreeError(
+                    CANNOT_DELETE_FOLDER_MESSAGE.format(reason=exc.strerror or exc)
+                ) from exc
+        ref = BRANCH_REF.format(branch=branch)
+        if (
+            delete_branch
+            and self._ref_exists(source, ref)
+            and not any(entry_ref == ref for _folder, entry_ref in self._worktree_entries(source))
+        ):
+            self._run_checked(source, "branch", "-D", branch)
+
+    def _worktree_entries(self, source: Path) -> list[tuple[Path, str | None]]:
+        """(folder, checked-out ref or None when detached) of every registered worktree,
+        from `git worktree list --porcelain`. Checks the repository first."""
+        self._check_repository(source)
+        completed = self._run_checked(source, "worktree", "list", "--porcelain")
+        entries: list[tuple[Path, str | None]] = []
+        for block in completed.stdout.split("\n\n"):  # text mode: newlines are "\n"
+            folder: Path | None = None
+            ref: str | None = None
+            for line in block.splitlines():
+                if line.startswith("worktree "):
+                    folder = Path(line.removeprefix("worktree "))
+                elif line.startswith("branch "):
+                    ref = line.removeprefix("branch ")
+            if folder is not None:
+                entries.append((folder, ref))
+        return entries
+
+    def _run_checked(self, source: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        """_run, then raise GitWorktreeError(_failure_message(completed)) on a non-zero exit."""
+        completed = self._run(source, *args)
+        if completed.returncode != 0:
+            raise GitWorktreeError(self._failure_message(completed))
+        return completed
+
+    @staticmethod
+    def _failure_message(completed: subprocess.CompletedProcess[str]) -> str:
+        """Stripped stderr, or f"git exited with code {completed.returncode}" when empty."""
+        return completed.stderr.strip() or f"git exited with code {completed.returncode}"
 
     def _check_repository(self, source: Path) -> None:
         """Raise GitWorktreeError(NOT_A_REPOSITORY_MESSAGE) unless
@@ -82,3 +150,14 @@ class SubprocessGitWorktrees:
             raise GitWorktreeError(GIT_NOT_FOUND_MESSAGE) from exc
         except OSError as exc:
             raise GitWorktreeError(f"cannot run git: {exc.strerror or exc}") from exc
+
+
+def _same_folder(a: Path, b: Path) -> bool:
+    """Same folder after resolve(), ignoring case on Windows (os.path.normcase)."""
+    return os.path.normcase(a.resolve()) == os.path.normcase(b.resolve())
+
+
+def _make_writable_and_retry(function, path, _exc) -> None:
+    """shutil.rmtree onexc handler: clear the read-only flag and retry (Windows)."""
+    os.chmod(path, stat.S_IWRITE)
+    function(path)

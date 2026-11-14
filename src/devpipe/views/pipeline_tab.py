@@ -6,24 +6,31 @@ Only panels in PERSISTED_PANELS are written as `active_panel`.
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
+from devpipe.models.worktree import WorktreeRequest, WorktreeResult
 from devpipe.services.tab_state_service import TabStateService
+from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.new_worktree_panel import NewWorktreePanel
 from devpipe.views.start_panel import StartPanel
+from devpipe.views.worktree_worker import WorktreeWorker
 
 NEW_TAB_TITLE = "New pipeline"
 SAVE_ERROR_TITLE = "Cannot save state file"
+RUN_ERROR_TITLE = "Worktree creation failed"
 
 
 class PipelineTab(QWidget):
     identity_changed = Signal()  # emitted after title() or tooltip() change
+    run_finished = Signal()  # emitted after a run's outcome was applied (results, recovery or warning)
 
-    def __init__(self, tab_states: TabStateService) -> None:
+    def __init__(self, tab_states: TabStateService, worktrees: WorktreeService) -> None:
         super().__init__()
         self._tab_states = tab_states
+        self._worktree_service = worktrees  # `_worktrees` holds the path list
+        self._worker: WorktreeWorker | None = None  # the run in progress, if any
         self._state_path: Path | None = None
         self._feature_name: str | None = None
         self._active_panel = Panel.START
@@ -48,6 +55,12 @@ class PipelineTab(QWidget):
         layout.addWidget(self.stack)
 
         self.start_panel.new_worktree_requested.connect(self.open_new_worktree_panel)
+        self.new_worktree_panel.create_requested.connect(self._start_run)
+
+    @property
+    def run_in_progress(self) -> bool:
+        """True from the start of a run until its outcome was applied (just before run_finished)."""
+        return self._worker is not None
 
     @property
     def state_path(self) -> Path | None:
@@ -104,6 +117,46 @@ class PipelineTab(QWidget):
             return False
         self.apply_saved(path, state)
         return True
+
+    def _start_run(self, requests: list[WorktreeRequest]) -> None:
+        """Create the worktrees of `requests` on a worker thread; ignored while a run is
+        in progress or when the tab is unsaved (no feature name)."""
+        if self._worker is not None or self._state_path is None:
+            return
+        self.new_worktree_panel.set_busy(True)
+        self._worker = WorktreeWorker(self._worktree_service, self._feature_name, requests)
+        self._worker.results_ready.connect(self._on_run_results)
+        self._worker.error_occurred.connect(self._on_run_error)
+        self._worker.start()
+
+    @Slot(object)
+    def _on_run_results(self, results: list[WorktreeResult]) -> None:
+        """Apply a run's results: merge the created paths, then go back to start (all ok)
+        or show the results; either way the state file is written once."""
+        self._worker.wait()  # the thread is returning; finish it before any modal box
+        self.new_worktree_panel.set_busy(False)
+        created = [result.target for result in results if result.ok]
+        self._worktrees = self._worktree_service.merge_paths(self._worktrees, created)
+        self.start_panel.show_worktrees(self._worktrees)
+        if all(result.ok for result in results):
+            self.show_panel(Panel.START)  # its auto-save is the single write
+        else:
+            self.new_worktree_panel.show_results(results)
+            self._write(self._state_path, self._current_state())
+        self._end_run()
+
+    @Slot(str)
+    def _on_run_error(self, text: str) -> None:
+        """The snapshot or the recovery raised: warn; nothing is written or changed."""
+        self._worker.wait()
+        self.new_worktree_panel.set_busy(False)
+        QMessageBox.warning(self, RUN_ERROR_TITLE, text)
+        self._end_run()
+
+    def _end_run(self) -> None:
+        worker, self._worker = self._worker, None
+        worker.deleteLater()
+        self.run_finished.emit()
 
     def _display(self, panel: Panel) -> None:
         self.stack.setCurrentWidget(self._panels[panel])

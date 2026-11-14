@@ -30,6 +30,20 @@ class WorktreeResult:
         return self.error is None
 
 
+@dataclass(frozen=True)
+class PreRunState:
+    """What existed before a run, for one request; decides what recovery may delete.
+
+    `target` is `(request.parent / feature_name).resolve()`, the same folder the run
+    would create.
+    """
+
+    request: WorktreeRequest
+    target: Path
+    target_existed: bool  # a file or folder was at `target` before the run
+    branch_existed: bool  # the branch existed in the source repository, or could not be checked
+
+
 class GitWorktreeError(Exception):
     """A git worktree could not be created; str(error) is the readable message."""
 
