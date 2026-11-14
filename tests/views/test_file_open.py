@@ -118,8 +118,7 @@ def test_open_valid_file_adds_selected_saved_tab(make_window, open_dialog, warni
     assert panel.name_input.text() == "a"
     assert not panel.name_input.isEnabled()
     assert not panel.save_button.isEnabled()
-    assert panel.open_button.isEnabled()
-    assert panel.create_button.isEnabled()
+    assert panel.new_worktree_button.isEnabled()
     assert warnings == []
     assert valid_file.read_text(encoding="utf-8") == text_before
 

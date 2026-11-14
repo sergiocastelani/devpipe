@@ -3,7 +3,7 @@ at the bottom, the tab's worktree folders (double-click opens one in the file ex
 the "x" button asks the tab to remove the selected one from the list).
 
 "Create new worktree" asks the tab to open the New worktree panel. "Install/Update skills"
-(always enabled) asks for a destination folder and copies the agent skills into it. What "Open a pipeline" and "Create a pipeline" do is not decided yet.
+(always enabled) asks for a destination folder and copies the agent skills into it.
 """
 
 from pathlib import Path
@@ -31,8 +31,6 @@ NAME_PLACEHOLDER = "Feature name"
 SAVE_TEXT = "Save"
 NEW_WORKTREE_TEXT = "Create new worktree"
 INSTALL_SKILLS_TEXT = "Install/Update skills"
-OPEN_TEXT = "Open a pipeline"
-CREATE_TEXT = "Create a pipeline"
 BIG_BUTTON_MIN_WIDTH = 320
 BIG_BUTTON_MIN_HEIGHT = 90
 BIG_BUTTON_POINT_SIZE = 16
@@ -71,11 +69,7 @@ class StartPanel(QWidget):
         self.slug_label.setFont(font)
         self.new_worktree_button = self._big_button(NEW_WORKTREE_TEXT)
         self.install_skills_button = self._big_button(INSTALL_SKILLS_TEXT)
-        self.open_button = self._big_button(OPEN_TEXT)
-        self.create_button = self._big_button(CREATE_TEXT)
         self.new_worktree_button.setEnabled(False)
-        self.open_button.setEnabled(False)
-        self.create_button.setEnabled(False)
         self.worktrees_label = QLabel(WORKTREES_LABEL_TEXT)
         self.worktrees_list = QListWidget()
         self.worktrees_list.setAccessibleName(WORKTREES_LABEL_TEXT)
@@ -95,8 +89,6 @@ class StartPanel(QWidget):
         buttons.setSpacing(BIG_BUTTON_SPACING)
         buttons.addWidget(self.install_skills_button)
         buttons.addWidget(self.new_worktree_button)
-        buttons.addWidget(self.open_button)
-        buttons.addWidget(self.create_button)
 
         worktrees_header = QHBoxLayout()
         worktrees_header.addWidget(self.worktrees_label, 1)
@@ -120,14 +112,12 @@ class StartPanel(QWidget):
         self.show_worktrees([])
 
     def show_saved(self, feature_name: str) -> None:
-        """Switch to saved mode (one-way): name fixed, the big buttons enabled."""
+        """Switch to saved mode (one-way): name fixed, "Create new worktree" enabled."""
         self._saved = True
         self.name_input.setText(feature_name)
         self.name_input.setEnabled(False)
         self.save_button.setEnabled(False)
         self.new_worktree_button.setEnabled(True)
-        self.open_button.setEnabled(True)
-        self.create_button.setEnabled(True)
 
     def show_worktrees(self, paths: list[Path]) -> None:
         """Replace the worktree list with `paths` (shown as str(path)), in order.

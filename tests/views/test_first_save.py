@@ -67,8 +67,7 @@ def assert_unsaved(window, tab, name, slug):
     assert window.tabs.tabText(window.tabs.indexOf(tab)) == "New pipeline"
     assert panel.name_input.isEnabled()
     assert panel.save_button.isEnabled()
-    assert not panel.open_button.isEnabled()
-    assert not panel.create_button.isEnabled()
+    assert not panel.new_worktree_button.isEnabled()
     assert panel.name_input.text() == name
     assert panel.slug_label.text() == slug
 
@@ -116,8 +115,7 @@ def test_confirmed_save_writes_file_and_marks_tab_saved(
     assert panel.name_input.text() == "new-feature"
     assert not panel.name_input.isEnabled()
     assert not panel.save_button.isEnabled()
-    assert panel.open_button.isEnabled()
-    assert panel.create_button.isEnabled()
+    assert panel.new_worktree_button.isEnabled()
     index = window.tabs.indexOf(tab)
     assert window.tabs.tabText(index) == "new-feature"
     assert window.tabs.tabToolTip(index) == str(path)

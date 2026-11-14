@@ -62,8 +62,6 @@ def test_new_tab_start_panel_is_unsaved(qtbot, tab_states, worktree_service):
     tab = make_tab(qtbot, tab_states, worktree_service)
     panel = tab.start_panel
     assert not panel.save_button.isEnabled()
-    assert not panel.open_button.isEnabled()
-    assert not panel.create_button.isEnabled()
     assert not panel.new_worktree_button.isEnabled()
 
 
@@ -88,8 +86,6 @@ def test_apply_saved_switches_to_saved_mode_without_writing(qtbot, tab_states, w
     assert panel.name_input.text() == "x"
     assert not panel.name_input.isEnabled()
     assert not panel.save_button.isEnabled()
-    assert panel.open_button.isEnabled()
-    assert panel.create_button.isEnabled()
     assert panel.new_worktree_button.isEnabled()
     assert not path.exists()
 
@@ -132,8 +128,7 @@ def test_save_as_failure_warns_and_stays_unsaved(qtbot, tab_states, worktree_ser
     assert tab.title() == "New pipeline"
     panel = tab.start_panel
     assert panel.name_input.isEnabled()
-    assert not panel.open_button.isEnabled()
-    assert not panel.create_button.isEnabled()
+    assert not panel.new_worktree_button.isEnabled()
 
 
 def test_auto_save_failure_keeps_state_and_retries(qtbot, tab_states, worktree_service, tmp_path, warnings):

@@ -103,8 +103,7 @@ def test_restored_tab_shows_its_active_panel(make_window, files, tmp_path):
     assert tab.stack.currentWidget() is tab.start_panel
     assert tab.start_panel.name_input.text() == "a"
     assert not tab.start_panel.name_input.isEnabled()
-    assert tab.start_panel.open_button.isEnabled()
-    assert tab.start_panel.create_button.isEnabled()
+    assert tab.start_panel.new_worktree_button.isEnabled()
     assert window.tabs.tabToolTip(0) == str(a)
 
 

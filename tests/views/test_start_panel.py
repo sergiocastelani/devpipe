@@ -57,13 +57,13 @@ def opened_urls(monkeypatch):
 
 
 def big_button_column(panel) -> QVBoxLayout:
-    """The child layout of the panel's root layout that holds open_button."""
+    """The child layout of the panel's root layout that holds new_worktree_button."""
     root = panel.layout()
     for index in range(root.count()):
         column = root.itemAt(index).layout()
-        if column is not None and column.indexOf(panel.open_button) >= 0:
+        if column is not None and column.indexOf(panel.new_worktree_button) >= 0:
             return column
-    pytest.fail("no child layout holds open_button")
+    pytest.fail("no child layout holds new_worktree_button")
 
 
 def item_texts(panel):
@@ -81,13 +81,9 @@ def test_new_panel_is_unsaved_and_empty(qtbot):
     assert panel.name_input.isEnabled()
     assert panel.slug_label.text() == ""
     assert not panel.save_button.isEnabled()
-    assert not panel.open_button.isEnabled()
-    assert not panel.create_button.isEnabled()
     assert not panel.new_worktree_button.isEnabled()
     assert panel.new_worktree_button.text() == "Create new worktree"
     assert panel.save_button.text() == "Save"
-    assert panel.open_button.text() == "Open a pipeline"
-    assert panel.create_button.text() == "Create a pipeline"
 
 
 def test_typing_a_name_previews_slug_and_enables_only_save(qtbot):
@@ -95,8 +91,6 @@ def test_typing_a_name_previews_slug_and_enables_only_save(qtbot):
     qtbot.keyClicks(panel.name_input, "New Feature")
     assert panel.slug_label.text() == "new-feature"
     assert panel.save_button.isEnabled()
-    assert not panel.open_button.isEnabled()
-    assert not panel.create_button.isEnabled()
     assert not panel.new_worktree_button.isEnabled()
 
 
@@ -140,8 +134,6 @@ def test_show_saved_switches_to_saved_mode(qtbot):
     assert not panel.name_input.isEnabled()
     assert panel.slug_label.text() == "new-feature"
     assert not panel.save_button.isEnabled()
-    assert panel.open_button.isEnabled()
-    assert panel.create_button.isEnabled()
     assert panel.new_worktree_button.isEnabled()
     assert not panel.name_input.isHidden()
     assert not panel.save_button.isHidden()
@@ -154,18 +146,16 @@ def test_saved_mode_keeps_save_disabled(qtbot):
     assert not panel.save_button.isEnabled()
     panel.show_saved("x")
     assert not panel.save_button.isEnabled()
-    assert panel.open_button.isEnabled()
-    assert panel.create_button.isEnabled()
     assert panel.new_worktree_button.isEnabled()
 
 
-def test_new_worktree_button_matches_open_button_format(qtbot):
+def test_new_worktree_button_matches_install_skills_button_format(qtbot):
     panel = make_panel(qtbot)
     expected_size = QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
-    assert panel.new_worktree_button.minimumSize() == panel.open_button.minimumSize() == expected_size
+    assert panel.new_worktree_button.minimumSize() == panel.install_skills_button.minimumSize() == expected_size
     assert (
         panel.new_worktree_button.font().pointSize()
-        == panel.open_button.font().pointSize()
+        == panel.install_skills_button.font().pointSize()
         == BIG_BUTTON_POINT_SIZE
     )
 
