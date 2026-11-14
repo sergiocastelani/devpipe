@@ -11,7 +11,7 @@
 | S05 | [step-05.md](step-05.md) | done | 1 | 2e98e9e | Blocked once: S04 layout test expected 3 widgets; user approved updating it to 5 |
 | S06 | [step-06.md](step-06.md) | done | 1 | 4859355 | - |
 | S07 | [step-07.md](step-07.md) | done | 1 | 60381d5 | - |
-| S08 | [step-08.md](step-08.md) | done | 1 | COMMIT | - |
+| S08 | [step-08.md](step-08.md) | done | 1 | f93c7f0 | - |
 
 Status: pending | in-progress | done | skipped | blocked
 
