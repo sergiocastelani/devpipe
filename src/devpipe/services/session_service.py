@@ -24,3 +24,21 @@ class SessionService:
         config = self._store.load()
         config.last_state_folder = state_file.parent
         self._store.save(config)
+
+    def open_files(self) -> list[Path]:
+        """State files of the last session's saved tabs, in tab order (may hold invalid files)."""
+        return list(self._store.load().open_state_files)
+
+    def active_file(self) -> Path | None:
+        """State file of the tab that was selected, or None."""
+        return self._store.load().active_state_file
+
+    def remember_session(self, files: list[Path], active: Path | None) -> None:
+        """Store the open state files (in order) and the active one as absolute paths.
+
+        Load-modify-save: every other setting is kept. Store errors propagate.
+        """
+        config = self._store.load()
+        config.open_state_files = [path.absolute() for path in files]
+        config.active_state_file = active.absolute() if active is not None else None
+        self._store.save(config)

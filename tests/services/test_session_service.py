@@ -46,3 +46,49 @@ def test_remember_folder_keeps_other_settings(tmp_path):
     WindowStateService(config).remember_maximized(True)
     service.remember_folder(tmp_path / "x.json")
     assert config.load().window_maximized is True
+
+
+def test_session_defaults_to_empty(tmp_path):
+    service, _ = make_service(tmp_path)
+    assert service.open_files() == []
+    assert service.active_file() is None
+
+
+def test_remember_session_round_trips(tmp_path):
+    service, _ = make_service(tmp_path)
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    service.remember_session([a, b], b)
+    assert service.open_files() == [a, b]
+    assert service.active_file() == b
+
+
+def test_remember_session_without_active(tmp_path):
+    service, _ = make_service(tmp_path)
+    service.remember_session([tmp_path / "a.json"], None)
+    assert service.active_file() is None
+
+
+def test_remember_session_stores_absolute_paths(tmp_path):
+    service, _ = make_service(tmp_path)
+    service.remember_session([Path("x.json")], Path("x.json"))
+    assert service.open_files() == [Path("x.json").absolute()]
+    assert service.active_file() == Path("x.json").absolute()
+
+
+def test_remember_session_keeps_other_settings(tmp_path):
+    service, config = make_service(tmp_path)
+    WindowStateService(config).remember_maximized(True)
+    service.remember_folder(tmp_path / "states" / "x.json")
+    a = tmp_path / "a.json"
+    service.remember_session([a], a)
+    assert config.load().window_maximized is True
+    assert config.load().last_state_folder == tmp_path / "states"
+
+
+def test_remember_folder_keeps_session(tmp_path):
+    service, _ = make_service(tmp_path)
+    a = tmp_path / "a.json"
+    service.remember_session([a], a)
+    service.remember_folder(tmp_path / "states" / "x.json")
+    assert service.open_files() == [a]
+    assert service.active_file() == a

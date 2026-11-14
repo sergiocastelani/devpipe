@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget, QToolButton
 
-from devpipe.models.tab_state import TabState
+from devpipe.models.tab_state import TabState, TabStateError
 from devpipe.services.paths import same_file, with_default_suffix
 from devpipe.services.session_service import SessionService
 from devpipe.services.tab_state_service import TabStateService
@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self._session = session
         self.setWindowTitle("devpipe")
         self.resize(1000, 700)
+        self._session_sync_enabled = False
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -47,8 +48,15 @@ class MainWindow(QMainWindow):
         self.new_tab_button.setAccessibleName(NEW_TAB_BUTTON_TOOLTIP)
         self.new_tab_button.clicked.connect(lambda: self.add_new_tab())  # drop the `checked` argument
         self.tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
+        self.tabs.setMovable(True)
+        self.tabs.currentChanged.connect(lambda _index: self._sync_session())
+        self.tabs.tabBar().tabMoved.connect(lambda _from, _to: self._sync_session())
 
-        self.add_new_tab()
+        stored = (self._session.open_files(), self._session.active_file())
+        self._restore_session(*stored)
+        self._session_sync_enabled = True
+        if self._session_snapshot() != stored:
+            self._sync_session()  # only when restore dropped entries or changed the active file
 
     def add_pipeline_tab(self, tab: PipelineTab) -> int:
         """Insert `tab` at the end, titled from tab.title() / tab.tooltip(); return its index.
@@ -60,6 +68,8 @@ class MainWindow(QMainWindow):
         self.tabs.setTabToolTip(index, tab.tooltip())
         tab.identity_changed.connect(lambda: self._refresh_tab_identity(tab))
         tab.start_panel.save_requested.connect(lambda slug: self._save_tab_as(tab, slug))
+        tab.identity_changed.connect(self._sync_session)  # records the first save
+        self._sync_session()
         return index
 
     def add_new_tab(self) -> PipelineTab:
@@ -103,6 +113,64 @@ class MainWindow(QMainWindow):
         widget.deleteLater()
         if self.tabs.count() == 0:
             self.add_new_tab()
+        self._sync_session()
+
+    def _restore_session(self, files: list[Path], active: Path | None) -> None:
+        """Open a saved tab for each valid state file of `files`, in order; select `active`.
+
+        Invalid or duplicate entries are skipped silently. If nothing was restored, add one
+        unsaved tab. Called once from the constructor, while session sync is disabled.
+        """
+        selected: PipelineTab | None = None
+        for path in files:
+            if self.find_tab(path) is not None:
+                continue  # duplicate entry
+            try:
+                state = self._tab_states.load(path)
+            except TabStateError:
+                continue  # invalid file: skipped silently
+            tab = self.add_saved_tab(path, state)
+            if active is not None and same_file(path, active):
+                selected = tab
+        if self.tabs.count() == 0:
+            self.add_new_tab()
+        elif selected is not None:
+            self.tabs.setCurrentWidget(selected)
+        else:
+            self.tabs.setCurrentIndex(0)
+
+    def _session_snapshot(self) -> tuple[list[Path], Path | None]:
+        """(state files of the saved tabs in tab order, active file) as the tabs show them now."""
+        widgets = (self.tabs.widget(index) for index in range(self.tabs.count()))
+        files = [
+            widget.state_path
+            for widget in widgets
+            if isinstance(widget, PipelineTab) and widget.state_path is not None
+        ]
+        return files, self._session_active_file(files)
+
+    def _sync_session(self) -> None:
+        """Write _session_snapshot() to the session (remember_session).
+
+        No-op while session sync is disabled (during restore and after the window closed).
+        """
+        if not self._session_sync_enabled:
+            return
+        self._session.remember_session(*self._session_snapshot())
+
+    def _session_active_file(self, files: list[Path]) -> Path | None:
+        """State file to record as active for the given open `files`.
+
+        The current tab's file when it is saved; else the previously stored active file
+        if it is still open, else None.
+        """
+        current = self.tabs.currentWidget()
+        if isinstance(current, PipelineTab) and current.state_path is not None:
+            return current.state_path
+        previous = self._session.active_file()
+        if previous is not None and any(same_file(previous, path) for path in files):
+            return previous
+        return None
 
     def _save_tab_as(self, tab: PipelineTab, feature_name: str) -> None:
         """First-save flow for `tab` (Save dialog, duplicate check, write, last-used folder)."""
@@ -136,5 +204,6 @@ class MainWindow(QMainWindow):
             self.show()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self._session_sync_enabled = False  # Qt may emit currentChanged while tearing tabs down
         self._window_state.remember_maximized(self.isMaximized())
         super().closeEvent(event)
