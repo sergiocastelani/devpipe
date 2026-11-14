@@ -10,8 +10,8 @@
 | S04 | [step-04.md](step-04.md) | done | 1 | 0c39493 | - |
 | S05 | [step-05.md](step-05.md) | done | 1 | 2e98e9e | Blocked once: S04 layout test expected 3 widgets; user approved updating it to 5 |
 | S06 | [step-06.md](step-06.md) | done | 1 | 4859355 | - |
-| S07 | [step-07.md](step-07.md) | done | 1 | COMMIT | - |
-| S08 | [step-08.md](step-08.md) | pending | 0 | - | - |
+| S07 | [step-07.md](step-07.md) | done | 1 | 60381d5 | - |
+| S08 | [step-08.md](step-08.md) | done | 1 | COMMIT | - |
 
 Status: pending | in-progress | done | skipped | blocked
 
@@ -26,10 +26,11 @@ Deviations from a step file's implementation suggestions, as reported by its imp
 
 "`; test-side `partial_failure` fixture, helpers `list_texts`/`release`, hand-built requests in `test_recover_does_not_clean_target_of_verified_entry`, `RecordingGit.removes()` and an `add_worktree` that raises.
 - (S06) Button `clicked.connect(lambda: ...)` written on one line; test-side helpers `click_new_worktree`, `assert_fresh_panel` and extra assertions.
+- (S08) Test-side only: `test_closing_running_tab_directly_is_refused` closes the initial unsaved tab first so A is the only tab; extra assertions (A still in session, B listed before close, B current); module-level `REFUSAL` tuple and `open_files` helper.
 
 ## Checks pending for the user
 `needs-human` checks, collected from each step and verified by the user only after the run (section 4).
 - (S04) Folder picker by hand: open the New worktree panel, click a group's source (or parent) picker, navigate to a folder with the mouse in the real OS dialog and choose it; expect the input to show that folder with native `\` separators. Cancel leaves the input unchanged. — pass
-- (S07) Create in the real window (FR-11, FR-15): `uv run devpipe`, a tab saved as `try-wt`, New worktree panel with group 1 = a real repository and an existing empty parent folder, group 2 = a plain folder that is not a repository; click Create; expect the progress bar while it runs, group 1 green, group 2 red with "not a git repository", "Retry" shown; the state file lists only group 1's worktree. — pending
-- (S07) Retry to start (FR-14, FR-16, FR-04): change group 2's source to another repository with a different parent and click Retry; expect the tab to return to the start panel listing both worktrees, and the list still there after restarting the app. — pending
-- (S07) Retry with red groups removed (FR-17): with only the first group green and the second removed with '-', click Retry; expect the tab to return to start. Clean up the test worktrees and branches afterwards. — pending
+- (S07) Create in the real window (FR-11, FR-15): `uv run devpipe`, a tab saved as `try-wt`, New worktree panel with group 1 = a real repository and an existing empty parent folder, group 2 = a plain folder that is not a repository; click Create; expect the progress bar while it runs, group 1 green, group 2 red with "not a git repository", "Retry" shown; the state file lists only group 1's worktree. — pass
+- (S07) Retry to start (FR-14, FR-16, FR-04): change group 2's source to another repository with a different parent and click Retry; expect the tab to return to the start panel listing both worktrees, and the list still there after restarting the app. — pass
+- (S07) Retry with red groups removed (FR-17): with only the first group green and the second removed with '-', click Retry; expect the tab to return to start. Clean up the test worktrees and branches afterwards. — pass
