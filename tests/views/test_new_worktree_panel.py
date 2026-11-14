@@ -332,10 +332,12 @@ def test_layout_order_scroll_add_create(qtbot):
     panel = make_panel(qtbot)
     layout = panel.layout()
     widgets = [layout.itemAt(i).widget() for i in range(layout.count())]
-    assert len(widgets) == 3
-    scroll, add, create = widgets
+    assert len(widgets) == 5
+    scroll, add, error_box, progress_bar, create = widgets
     assert isinstance(scroll, QScrollArea)
     assert add is panel.add_button
+    assert error_box is panel.error_box
+    assert progress_bar is panel.progress_bar
     assert create is panel.create_button
     for group in panel.groups():
         assert scroll.widget().isAncestorOf(group)

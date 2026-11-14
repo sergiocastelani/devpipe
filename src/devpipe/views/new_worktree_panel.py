@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QToolButton,
@@ -18,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from devpipe.models.worktree import WorktreeRequest
+from devpipe.models.worktree import WorktreeRequest, WorktreeResult
 
 SOURCE_LABEL_TEXT = "Source project folder"
 PARENT_LABEL_TEXT = "Worktree parent folder"
@@ -32,6 +34,20 @@ REMOVE_TOOLTIP = "Remove worktree"
 CREATE_TEXT = "Create"
 GROUP_TITLE = "Worktree {n}"  # n is the 1-based display position
 NO_START_DIRECTORY = ""  # lets the OS dialog pick its default folder
+RETRY_TEXT = "Retry"
+CREATED_DESCRIPTION = "Created: {target}"
+FAILED_DESCRIPTION = "Failed: {error}"
+ERROR_ENTRY = "{source} \u2192 {target}: {error}"  # "→"
+ERROR_BOX_ACCESSIBLE_NAME = "Worktree errors"
+ERROR_BOX_MAX_HEIGHT = 120  # px; keeps the groups visible above it
+PROGRESS_ACCESSIBLE_NAME = "Creating worktrees"
+SUCCESS_BORDER_COLOR = "#2e7d32"  # green
+FAILURE_BORDER_COLOR = "#c62828"  # red
+RESULT_STYLE = (
+    "QGroupBox {{ border: 2px solid {color}; border-radius: 4px;"
+    " margin-top: 1.5ex; padding-top: 1ex; }}"
+    " QGroupBox::title {{ subcontrol-origin: margin; left: 8px; padding: 0 3px; }}"
+)
 
 
 class WorktreeGroup(QGroupBox):
@@ -140,6 +156,7 @@ class NewWorktreePanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self._busy = False
         self._groups: list[WorktreeGroup] = []
 
         groups_widget = QWidget()
@@ -153,10 +170,22 @@ class NewWorktreePanel(QWidget):
         self.add_button.setToolTip(ADD_TOOLTIP)
         self.add_button.setAccessibleName(ADD_TOOLTIP)
         self.create_button = QPushButton(CREATE_TEXT)
+        self.error_box = QPlainTextEdit()
+        self.error_box.setReadOnly(True)
+        self.error_box.setAccessibleName(ERROR_BOX_ACCESSIBLE_NAME)
+        self.error_box.setMaximumHeight(ERROR_BOX_MAX_HEIGHT)
+        self.error_box.hide()
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # indeterminate
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setAccessibleName(PROGRESS_ACCESSIBLE_NAME)
+        self.progress_bar.hide()
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._scroll, 1)
         layout.addWidget(self.add_button)
+        layout.addWidget(self.error_box)
+        layout.addWidget(self.progress_bar)
         layout.addWidget(self.create_button)
 
         self.add_button.clicked.connect(lambda: self._add_group())  # drop the `checked` argument
@@ -172,11 +201,34 @@ class NewWorktreePanel(QWidget):
         return [group for group in self._groups if not group.is_locked()]
 
     def reset(self) -> None:
-        """Delete every group and start again with one empty unlocked group."""
+        """Start fresh: one empty unlocked group, no errors, "Create", not busy."""
         for group in self._groups:
             self._discard(group)
         self._groups.clear()
         self._add_group()
+        self._show_errors([])
+        self.create_button.setText(CREATE_TEXT)
+        self.set_busy(False)
+
+    def set_busy(self, busy: bool) -> None:
+        """Disable (True) or restore (False) the groups, '+' and Create, and show the progress bar while busy."""
+        self._busy = busy
+        self._scroll.setEnabled(not busy)  # locked groups keep their own disabled pickers
+        self.add_button.setEnabled(not busy)
+        self.progress_bar.setVisible(busy)
+        self._refresh_create_enabled()
+
+    def show_results(self, results: list[WorktreeResult]) -> None:
+        """Show `results[i]` on `editable_groups()[i]` (read once, at call time) and list the failures."""
+        groups = self.editable_groups()
+        if len(results) != len(groups):
+            raise ValueError(f"expected {len(groups)} results, got {len(results)}")
+        for group, result in zip(groups, results):
+            self._show_group_result(group, result)
+        failed = [result for result in results if not result.ok]
+        self._show_errors(failed)
+        if failed:
+            self.create_button.setText(RETRY_TEXT)  # stays until reset()
 
     def _add_group(self) -> WorktreeGroup:
         group = WorktreeGroup()
@@ -207,7 +259,29 @@ class NewWorktreePanel(QWidget):
             group.set_removable(number > 1)
 
     def _refresh_create_enabled(self) -> None:
-        self.create_button.setEnabled(all(group.is_filled() for group in self.editable_groups()))
+        self.create_button.setEnabled(
+            not self._busy and all(group.is_filled() for group in self.editable_groups())
+        )
+
+    def _show_group_result(self, group: WorktreeGroup, result: WorktreeResult) -> None:
+        if result.ok:
+            text = CREATED_DESCRIPTION.format(target=result.target)
+            color = SUCCESS_BORDER_COLOR
+            group.set_locked(True)
+        else:
+            text = FAILED_DESCRIPTION.format(error=result.error)
+            color = FAILURE_BORDER_COLOR  # stays editable
+        group.setStyleSheet(RESULT_STYLE.format(color=color))
+        group.setToolTip(text)
+        group.setAccessibleDescription(text)
+
+    def _show_errors(self, failed: list[WorktreeResult]) -> None:
+        entries = [
+            ERROR_ENTRY.format(source=result.request.source, target=result.target, error=result.error)
+            for result in failed
+        ]
+        self.error_box.setPlainText("\n".join(entries))  # replaces the previous call's errors
+        self.error_box.setVisible(bool(entries))
 
     def _on_create_clicked(self) -> None:
         self.create_requested.emit([group.request() for group in self.editable_groups()])
