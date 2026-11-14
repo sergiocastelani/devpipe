@@ -5,9 +5,9 @@
 | Step | File | Status | Rounds | Checkpoint | Notes |
 |------|------|--------|--------|-----------|-------|
 | S01 | [step-01.md](step-01.md) | done | 1 | a2ded7a | - |
-| S02 | [step-02.md](step-02.md) | done | 1 | HASH | - |
+| S02 | [step-02.md](step-02.md) | done | 1 | 9a81480 | - |
 | S03 | [step-03.md](step-03.md) | done | 1 | 9323b35 | - |
-| S04 | [step-04.md](step-04.md) | pending | 0 | - | - |
+| S04 | [step-04.md](step-04.md) | done | 1 | HASH | - |
 | S05 | [step-05.md](step-05.md) | pending | 0 | - | - |
 | S06 | [step-06.md](step-06.md) | pending | 0 | - | - |
 | S07 | [step-07.md](step-07.md) | pending | 0 | - | - |
@@ -20,6 +20,8 @@ Deviations from a step file's implementation suggestions, as reported by its imp
 - (S01) Test-side only: `test_v2_file_load_then_save_is_identical` writes its input in text mode (CRLF on Windows, like the repository); extra `_INVALID_FILES` row `worktrees-number`; `test_load_v1_ignores_worktrees_key` asserts `worktrees == []`.
 
 - (S02) Test-side only: `test_show_worktrees_does_not_keep_caller_list` also asserts the caller's list is unmodified; `test_apply_saved_without_worktrees_hides_list` also asserts the label is hidden. The `openUrl` result is checked inline instead of stored in a local `opened`.
+- (S04) `_add_group` inserts into the layout before appending to `_groups` (keeps the group before the stretch); private helpers `WorktreeGroup._tool_button` and `NewWorktreePanel._discard`; `WorktreeGroup.__init__` ends with `_refresh_controls()`; test-side helpers and extra assertions.
 
 ## Checks pending for the user
 `needs-human` checks, collected from each step and verified by the user only after the run (section 4).
+- (S04) Folder picker by hand: open the New worktree panel, click a group's source (or parent) picker, navigate to a folder with the mouse in the real OS dialog and choose it; expect the input to show that folder with native `\` separators. Cancel leaves the input unchanged. — pending

@@ -31,9 +31,10 @@ src/devpipe/
 ├── persistence/
 ├── services/
 └── views/
-    ├── main_window.py   # window, tab bar with "+" and closable tabs
-    ├── pipeline_tab.py  # one tab: a stack of panels
-    └── start_panel.py   # first panel: feature name, Save, start buttons
+    ├── main_window.py         # window, tab bar with "+" and closable tabs
+    ├── new_worktree_panel.py  # New worktree panel: folder groups, '+', Create
+    ├── pipeline_tab.py        # one tab: a stack of panels
+    └── start_panel.py         # first panel: feature name, Save, start buttons
 
 tests/               # mirrors the layers: models/, persistence/, services/, views/
 ```
