@@ -106,7 +106,12 @@ def test_confirmed_save_writes_file_and_marks_tab_saved(
     dialog.answer = path
     request_save(qtbot, tab, "New Feature")
 
-    assert read_json(path) == {"version": 1, "feature_name": "new-feature", "active_panel": "start"}
+    assert read_json(path) == {
+        "version": 2,
+        "feature_name": "new-feature",
+        "active_panel": "start",
+        "worktrees": [],
+    }
     panel = tab.start_panel
     assert panel.name_input.text() == "new-feature"
     assert not panel.name_input.isEnabled()
@@ -210,4 +215,9 @@ def test_changes_after_first_save_auto_save_without_dialog(
     monkeypatch.setattr(QFileDialog, "getSaveFileName", fail)
     path.unlink()
     tab.show_panel(Panel.START)
-    assert read_json(path) == {"version": 1, "feature_name": "x", "active_panel": "start"}
+    assert read_json(path) == {
+        "version": 2,
+        "feature_name": "x",
+        "active_panel": "start",
+        "worktrees": [],
+    }

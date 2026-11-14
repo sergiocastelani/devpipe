@@ -186,8 +186,16 @@ def test_open_already_open_file_ignores_case_on_windows(
     [
         (None, "file not found"),
         ("{not json", "not valid JSON"),
-        ({"version": 2, "feature_name": "a", "active_panel": "start"}, "unsupported version"),
+        ({"version": 3, "feature_name": "a", "active_panel": "start"}, "unsupported version"),
         ({"version": 1, "feature_name": "a", "active_panel": "process"}, "unknown active_panel"),
+        (
+            {"version": 2, "feature_name": "a", "active_panel": "start", "worktrees": "x"},
+            "invalid worktrees",
+        ),
+        (
+            {"version": 2, "feature_name": "a", "active_panel": "new-worktree", "worktrees": []},
+            "unknown active_panel",
+        ),
     ],
 )
 def test_open_invalid_file_warns_and_adds_no_tab(
@@ -211,6 +219,28 @@ def test_open_invalid_file_warns_and_adds_no_tab(
     assert window.tabs.count() == before
     assert window.tabs.currentIndex() == current
     assert last_state_folder(tmp_path) is None
+
+
+def test_open_v1_file_loads_and_next_write_is_v2(tmp_path, make_window, open_dialog, warnings):
+    path = write_state(tmp_path / "a.json", "a")
+    bytes_before = path.read_bytes()
+    window = make_window()
+    before = window.tabs.count()
+    open_dialog.answer = str(path)
+    window.open_action.trigger()
+    assert window.tabs.count() == before + 1
+    tab = window.tabs.currentWidget()
+    assert isinstance(tab, PipelineTab)
+    assert tab.state_path == path
+    assert path.read_bytes() == bytes_before
+    tab.show_panel(Panel.START)
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "version": 2,
+        "feature_name": "a",
+        "active_panel": "start",
+        "worktrees": [],
+    }
+    assert warnings == []
 
 
 def test_open_two_files_adds_two_tabs(tmp_path, make_window, open_dialog, warnings):

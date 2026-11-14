@@ -38,14 +38,14 @@ root_packages = ["devpipe"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Layers: app -> views -> services -> persistence -> models"
+name = "Layers: app -> views -> services -> persistence | infrastructure -> models"
 type = "layers"
 layers = [
     "devpipe.__main__",
     "devpipe.app",
     "devpipe.views",
     "devpipe.services",
-    "devpipe.persistence",
+    "devpipe.persistence | devpipe.infrastructure",
     "devpipe.models",
 ]
 
@@ -56,7 +56,13 @@ source_modules = ["devpipe.views"]
 forbidden_modules = ["devpipe.persistence"]
 
 [[tool.importlinter.contracts]]
+name = "Views never import infrastructure"
+type = "forbidden"
+source_modules = ["devpipe.views"]
+forbidden_modules = ["devpipe.infrastructure"]
+
+[[tool.importlinter.contracts]]
 name = "Only views and app use Qt"
 type = "forbidden"
-source_modules = ["devpipe.services", "devpipe.persistence", "devpipe.models"]
+source_modules = ["devpipe.services", "devpipe.persistence", "devpipe.infrastructure", "devpipe.models"]
 forbidden_modules = ["PySide6"]

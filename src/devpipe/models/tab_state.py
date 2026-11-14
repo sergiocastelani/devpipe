@@ -2,25 +2,35 @@
 
 import enum
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-STATE_FILE_VERSION = 1
-"""The only tab state file format version this app reads and writes."""
+STATE_FILE_VERSION = 2
+"""The tab state file format version this app writes (it also reads version 1)."""
 
 _FEATURE_NAME_PATTERN = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
 
 class Panel(enum.Enum):
-    """Panel ids of a tab; the values are the `active_panel` strings of the file."""
+    """Panel ids of a tab; the values are the `active_panel` strings of the file.
+
+    Only the panels in PERSISTED_PANELS are ever read from or written to a file.
+    """
 
     START = "start"
+    NEW_WORKTREE = "new-worktree"
+
+
+PERSISTED_PANELS: frozenset[Panel] = frozenset({Panel.START})
+"""The panels a tab state file may hold as `active_panel`."""
 
 
 @dataclass
 class TabState:
     feature_name: str
     active_panel: Panel = Panel.START
+    worktrees: list[Path] = field(default_factory=list)
+    """Worktree folders of the tab, in saved order (absolute when created by the app)."""
 
 
 def is_valid_feature_name(name: str) -> bool:

@@ -108,6 +108,24 @@ def test_restored_tab_shows_its_active_panel(make_window, files, tmp_path):
     assert window.tabs.tabToolTip(0) == str(a)
 
 
+def test_restart_with_new_worktree_panel_open_restores_start_panel(make_window, files):
+    a, _ = files
+    window = make_window()
+    tab = window.add_saved_tab(a, TabState("a"))
+    tab.open_new_worktree_panel()
+    assert tab.stack.currentWidget() is tab.new_worktree_panel
+    window.close()
+
+    restarted = make_window()
+    assert json.loads(a.read_text("utf-8"))["active_panel"] == "start"
+    assert restarted.tabs.count() == 1
+    restored = restarted.tabs.widget(0)
+    assert restored.state_path == a
+    assert restored.active_panel is Panel.START
+    assert restored.stack.currentWidget() is restored.start_panel
+    assert restored.start_panel.new_worktree_button.isEnabled()
+
+
 def test_unsaved_active_tab_selects_last_active_saved_tab(make_window, files):
     a, b = files
     window = make_window()

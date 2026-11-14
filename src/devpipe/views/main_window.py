@@ -9,8 +9,10 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget,
 from devpipe.models.tab_state import TabState, TabStateError
 from devpipe.services.paths import same_file, with_default_suffix
 from devpipe.services.session_service import SessionService
+from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.window_state_service import WindowStateService
+from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.pipeline_tab import PipelineTab
 
 NEW_TAB_BUTTON_TEXT = "+"
@@ -25,6 +27,8 @@ OPEN_ACTION_TEXT = "&Open..."  # mnemonic: O inside the File menu
 OPEN_SHORTCUT = "Ctrl+O"
 OPEN_DIALOG_TITLE = "Open pipeline state"
 OPEN_ERROR_TITLE = "Cannot open state file"
+RUN_IN_PROGRESS_TITLE = "Worktree creation in progress"
+RUN_IN_PROGRESS_TEXT = "Wait for the worktree creation to finish before closing."
 
 
 class MainWindow(QMainWindow):
@@ -33,10 +37,14 @@ class MainWindow(QMainWindow):
         window_state: WindowStateService,
         tab_states: TabStateService,
         session: SessionService,
+        worktrees: WorktreeService,
+        skills: SkillsService,
     ) -> None:
         super().__init__()
         self._window_state = window_state
         self._tab_states = tab_states
+        self._worktree_service = worktrees
+        self._skills = skills
         self._session = session
         self.setWindowTitle("devpipe")
         self.resize(1000, 700)
@@ -80,14 +88,14 @@ class MainWindow(QMainWindow):
 
     def add_new_tab(self) -> PipelineTab:
         """Build an unsaved PipelineTab, add it with add_pipeline_tab, select it, return it."""
-        tab = PipelineTab(self._tab_states)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills)
         self.tabs.setCurrentIndex(self.add_pipeline_tab(tab))
         return tab
 
     def add_saved_tab(self, path: Path, state: TabState) -> PipelineTab:
         """Build a PipelineTab, apply_saved(path, state) (no write), add it with
         add_pipeline_tab, select it and return it. Does not check for duplicates."""
-        tab = PipelineTab(self._tab_states)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills)
         tab.apply_saved(path, state)
         index = self.add_pipeline_tab(tab)
         self.tabs.setCurrentIndex(index)
@@ -111,15 +119,31 @@ class MainWindow(QMainWindow):
 
         The single place tabs are removed; wired to tabs.tabCloseRequested.
         Out-of-range index: no-op. If no tab is left, calls add_new_tab().
+        A tab with a run in progress is not removed: an information box is shown instead.
         """
         widget = self.tabs.widget(index)
         if widget is None:
+            return
+        if isinstance(widget, PipelineTab) and widget.run_in_progress:
+            self._refuse_close()
             return
         self.tabs.removeTab(index)
         widget.deleteLater()
         if self.tabs.count() == 0:
             self.add_new_tab()
         self._sync_session()
+
+    def _any_run_in_progress(self) -> bool:
+        """True when at least one PipelineTab in self.tabs has run_in_progress."""
+        for index in range(self.tabs.count()):
+            widget = self.tabs.widget(index)
+            if isinstance(widget, PipelineTab) and widget.run_in_progress:
+                return True
+        return False
+
+    def _refuse_close(self) -> None:
+        """Show the 'Worktree creation in progress' information box (parent: self)."""
+        QMessageBox.information(self, RUN_IN_PROGRESS_TITLE, RUN_IN_PROGRESS_TEXT)
 
     def _restore_session(self, files: list[Path], active: Path | None) -> None:
         """Open a saved tab for each valid state file of `files`, in order; select `active`.
@@ -240,6 +264,10 @@ class MainWindow(QMainWindow):
             self.show()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self._any_run_in_progress():
+            self._refuse_close()
+            event.ignore()
+            return
         self._session_sync_enabled = False  # Qt may emit currentChanged while tearing tabs down
         self._window_state.remember_maximized(self.isMaximized())
         super().closeEvent(event)
