@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget, QToolButton
 
 from devpipe.models.tab_state import TabState, TabStateError
@@ -20,6 +20,11 @@ STATE_FILE_FILTER = "JSON files (*.json)"
 SAVE_DIALOG_TITLE = "Save pipeline state"
 ALREADY_OPEN_TITLE = "State file already open"
 ALREADY_OPEN_TEXT = "This state file is already open in another tab."
+FILE_MENU_TITLE = "&File"  # mnemonic: Alt+F
+OPEN_ACTION_TEXT = "&Open..."  # mnemonic: O inside the File menu
+OPEN_SHORTCUT = "Ctrl+O"
+OPEN_DIALOG_TITLE = "Open pipeline state"
+OPEN_ERROR_TITLE = "Cannot open state file"
 
 
 class MainWindow(QMainWindow):
@@ -39,6 +44,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
+        self._build_menu_bar()
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
 
@@ -186,6 +192,36 @@ class MainWindow(QMainWindow):
             return
         if not tab.save_as(path, feature_name):
             return  # the tab already showed the write error
+        self._session.remember_folder(path)
+
+    def _build_menu_bar(self) -> None:
+        """Create the File menu with the Open... action (Ctrl+O)."""
+        file_menu = self.menuBar().addMenu(FILE_MENU_TITLE)
+        self.open_action = QAction(OPEN_ACTION_TEXT, self)
+        self.open_action.setShortcut(QKeySequence(OPEN_SHORTCUT))
+        self.open_action.triggered.connect(lambda: self._open_state_file())  # drop the `checked` argument
+        file_menu.addAction(self.open_action)
+
+    def _open_state_file(self) -> None:
+        """File > Open flow: Open dialog, focus an already open tab, or load and add a saved tab."""
+        selected, _ = QFileDialog.getOpenFileName(
+            self, OPEN_DIALOG_TITLE, str(self._session.start_folder()), STATE_FILE_FILTER
+        )
+        if selected == "":
+            return
+        path = Path(selected)
+        index = self.find_tab(path)
+        if index is not None:
+            tab = self.tabs.widget(index)
+            self.tabs.setCurrentIndex(index)
+            self._session.remember_folder(tab.state_path)  # the tab's own spelling of the file
+            return
+        try:
+            state = self._tab_states.load(path)
+        except TabStateError as error:
+            QMessageBox.warning(self, OPEN_ERROR_TITLE, f"{error.path}\n\n{error.reason}")
+            return
+        self.add_saved_tab(path, state)
         self._session.remember_folder(path)
 
     def _refresh_tab_identity(self, tab: PipelineTab) -> None:
