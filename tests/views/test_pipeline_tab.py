@@ -8,7 +8,7 @@ from devpipe.models.tab_state import Panel, TabState
 from devpipe.views.pipeline_tab import PipelineTab
 from devpipe.views.start_panel import StartPanel
 
-EXPECTED_FILE = {"version": 1, "feature_name": "x", "active_panel": "start"}
+EXPECTED_FILE = {"version": 2, "feature_name": "x", "active_panel": "start", "worktrees": []}
 
 
 def make_tab(qtbot, tab_states):
@@ -131,6 +131,8 @@ def test_auto_save_failure_keeps_state_and_retries(qtbot, tab_states, tmp_path, 
     folder.mkdir()
     path = folder / "x.json"
     assert tab.save_as(path, "x") is True
+    a = tmp_path / "wt" / "a"
+    tab.apply_saved(path, TabState("x", Panel.START, [a]))
 
     shutil.rmtree(folder)
     tab.show_panel(Panel.START)
@@ -144,5 +146,34 @@ def test_auto_save_failure_keeps_state_and_retries(qtbot, tab_states, tmp_path, 
 
     folder.mkdir()
     tab.show_panel(Panel.START)
-    assert read_json(path) == EXPECTED_FILE
+    assert read_json(path) == {**EXPECTED_FILE, "worktrees": [str(a)]}
     assert len(warnings) == 1
+
+
+def test_show_panel_keeps_loaded_worktrees(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    b = tmp_path / "wt" / "b"
+    tab.apply_saved(path, TabState("x", Panel.START, [a, b]))
+    for _ in range(2):
+        tab.show_panel(Panel.START)
+        assert read_json(path)["worktrees"] == [str(a), str(b)]
+
+
+def test_apply_saved_copies_worktrees(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    state = TabState("x", Panel.START, [a])
+    tab.apply_saved(path, state)
+    state.worktrees.append(tmp_path / "wt" / "b")
+    tab.show_panel(Panel.START)
+    assert read_json(path)["worktrees"] == [str(a)]
+
+
+def test_save_as_writes_empty_worktrees(qtbot, tab_states, tmp_path):
+    tab = make_tab(qtbot, tab_states)
+    path = tmp_path / "x.json"
+    assert tab.save_as(path, "x") is True
+    assert read_json(path) == EXPECTED_FILE

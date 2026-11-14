@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from devpipe.models.tab_state import (
+    PERSISTED_PANELS,
     STATE_FILE_VERSION,
     Panel,
     TabState,
@@ -11,19 +12,34 @@ from devpipe.models.tab_state import (
 )
 
 
-def test_panel_start_value_is_start():
+def test_panel_values():
     assert Panel.START.value == "start"
     assert Panel("start") is Panel.START
-    assert len(Panel) == 1
+    assert Panel.NEW_WORKTREE.value == "new-worktree"
+    assert Panel("new-worktree") is Panel.NEW_WORKTREE
+    assert len(Panel) == 2
+
+
+def test_persisted_panels_is_start_only():
+    assert PERSISTED_PANELS == frozenset({Panel.START})
 
 
 def test_tab_state_defaults_to_start_panel():
     assert TabState("a").active_panel is Panel.START
     assert TabState("a") == TabState("a", Panel.START)
+    assert TabState("a") == TabState("a", Panel.START, [])
+    assert TabState("a").worktrees == []
 
 
-def test_state_file_version_is_1():
-    assert STATE_FILE_VERSION == 1
+def test_tab_state_worktrees_default_is_not_shared():
+    first = TabState("a")
+    second = TabState("a")
+    first.worktrees.append(Path("x"))
+    assert second.worktrees == []
+
+
+def test_state_file_version_is_2():
+    assert STATE_FILE_VERSION == 2
 
 
 @pytest.mark.parametrize("name", ["a", "new-feature", "nova-feature-x", "a1-2b"])

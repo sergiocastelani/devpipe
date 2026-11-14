@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from devpipe.models.tab_state import (
+    PERSISTED_PANELS,
     STATE_FILE_VERSION,
     Panel,
     TabState,
@@ -14,7 +15,11 @@ from devpipe.models.tab_state import (
 _VERSION_KEY = "version"
 _FEATURE_NAME_KEY = "feature_name"
 _ACTIVE_PANEL_KEY = "active_panel"
-_PANEL_VALUES = frozenset(panel.value for panel in Panel)
+_WORKTREES_KEY = "worktrees"
+_V1 = 1  # the format without `worktrees`
+_READABLE_VERSIONS = frozenset({_V1, STATE_FILE_VERSION})
+_PANEL_VALUES = frozenset(panel.value for panel in PERSISTED_PANELS)
+_INVALID_WORKTREES = "invalid worktrees"
 
 
 def _os_error_text(exc: OSError) -> str:
@@ -27,17 +32,21 @@ class TabStateRepository:
         return self._parse(path, self._read_json(path))
 
     def save(self, path: Path, state: TabState) -> None:
-        """Write the file (overwrites).
+        """Write the file (overwrites) in the current format (version 2).
 
-        Raises TabStateError (only) for a well-typed `state`; a wrongly typed
-        `state` is a programming error and its exception propagates.
+        Raises TabStateError (only) for a well-typed `state`; a wrongly typed `state`
+        or an `active_panel` outside PERSISTED_PANELS is a programming error:
+        the latter raises ValueError and nothing is written.
         """
+        if state.active_panel not in PERSISTED_PANELS:
+            raise ValueError(f"panel is not persisted: {state.active_panel}")
         if not is_valid_feature_name(state.feature_name):
             raise TabStateError(path, "invalid feature_name")
         data = {
             _VERSION_KEY: STATE_FILE_VERSION,
             _FEATURE_NAME_KEY: state.feature_name,
             _ACTIVE_PANEL_KEY: state.active_panel.value,
+            _WORKTREES_KEY: [str(worktree) for worktree in state.worktrees],
         }
         try:
             path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -72,7 +81,7 @@ class TabStateRepository:
             raise TabStateError(path, "missing version")
         version = data[_VERSION_KEY]
         # type() check: bool is a subclass of int and True == 1.
-        if type(version) is not int or version != STATE_FILE_VERSION:
+        if type(version) is not int or version not in _READABLE_VERSIONS:
             raise TabStateError(path, f"unsupported version: {version!r}")
 
         if _FEATURE_NAME_KEY not in data:
@@ -89,4 +98,16 @@ class TabStateRepository:
         if not isinstance(active_panel, str) or active_panel not in _PANEL_VALUES:
             raise TabStateError(path, f"unknown active_panel: {active_panel!r}")
 
-        return TabState(feature_name, Panel(active_panel))
+        worktrees = self._parse_worktrees(path, data) if version != _V1 else []
+
+        return TabState(feature_name, Panel(active_panel), worktrees)
+
+    def _parse_worktrees(self, path: Path, data: dict) -> list[Path]:
+        """The v2 `worktrees` list as Paths. Raises TabStateError(path, "invalid worktrees")
+        when the key is missing, is not a list, or holds an item that is not a non-empty str."""
+        worktrees = data.get(_WORKTREES_KEY)
+        if not isinstance(worktrees, list):
+            raise TabStateError(path, _INVALID_WORKTREES)
+        if not all(isinstance(item, str) and item != "" for item in worktrees):
+            raise TabStateError(path, _INVALID_WORKTREES)
+        return [Path(item) for item in worktrees]

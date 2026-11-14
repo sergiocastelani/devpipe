@@ -25,6 +25,9 @@ class PipelineTab(QWidget):
         self._state_path: Path | None = None
         self._feature_name: str | None = None
         self._active_panel = Panel.START
+        # The tab's worktree folders; every state file write carries it. Other code
+        # may replace or append to it, and the next write persists it.
+        self._worktrees: list[Path] = []
 
         self.stack = QStackedWidget()
         self.start_panel = StartPanel()
@@ -68,6 +71,7 @@ class PipelineTab(QWidget):
         """Put the tab in saved mode for `path` and `state` without writing."""
         self._state_path = path
         self._feature_name = state.feature_name
+        self._worktrees = list(state.worktrees)
         self.start_panel.show_saved(state.feature_name)
         self._display(state.active_panel)
         self.identity_changed.emit()
@@ -77,7 +81,7 @@ class PipelineTab(QWidget):
 
         Returns False (tab unchanged, warning shown) when the write fails.
         """
-        state = TabState(feature_name, self._active_panel)
+        state = TabState(feature_name, self._active_panel, list(self._worktrees))
         if not self._write(path, state):
             return False
         self.apply_saved(path, state)
@@ -88,7 +92,7 @@ class PipelineTab(QWidget):
         self._active_panel = panel
 
     def _current_state(self) -> TabState:
-        return TabState(self._feature_name, self._active_panel)
+        return TabState(self._feature_name, self._active_panel, list(self._worktrees))
 
     def _write(self, path: Path, state: TabState) -> bool:
         """The only place the tab writes its file; warns and returns False on failure."""
