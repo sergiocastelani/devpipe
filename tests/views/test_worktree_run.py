@@ -9,12 +9,15 @@ from PySide6.QtWidgets import QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.worktree import GitWorktreeError, WorktreeRequest, WorktreeResult
+from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.skills_service import SkillsService
 from devpipe.views.pipeline_tab import PipelineTab
 from devpipe.views.worktree_worker import WorktreeWorker
 
 RUN_TIMEOUT_MS = 5000
 FEATURE = "feat-x"
 FOLDER = f"worktree-{FEATURE}"
+UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
 
 
 @pytest.fixture
@@ -49,7 +52,7 @@ def read_json(path: Path) -> dict:
 
 
 def saved_tab(qtbot, tab_states, worktree_service, path, worktrees=()):
-    tab = PipelineTab(tab_states, worktree_service)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS)
     qtbot.addWidget(tab)
     tab.apply_saved(path, TabState(FEATURE, Panel.START, list(worktrees)))
     tab.open_new_worktree_panel()
@@ -341,7 +344,7 @@ def test_create_ignored_while_run_in_progress(
 
 
 def test_create_on_unsaved_tab_is_ignored(qtbot, tmp_path, tab_states, worktree_service, fake_git):
-    tab = PipelineTab(tab_states, worktree_service)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS)
     qtbot.addWidget(tab)
     tab.open_new_worktree_panel()
     src = tmp_path / "src0"

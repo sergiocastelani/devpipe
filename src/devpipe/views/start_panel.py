@@ -2,7 +2,8 @@
 at the bottom, the tab's worktree folders (double-click opens one in the file explorer;
 the "x" button asks the tab to remove the selected one from the list).
 
-"Create new worktree" asks the tab to open the New worktree panel. What "Open a pipeline" and "Create a pipeline" do is not decided yet.
+"Create new worktree" asks the tab to open the New worktree panel. "Install/Update skills"
+(always enabled) asks for a destination folder and copies the agent skills into it. What "Open a pipeline" and "Create a pipeline" do is not decided yet.
 """
 
 from pathlib import Path
@@ -12,6 +13,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QFileDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -22,10 +24,13 @@ from PySide6.QtWidgets import (
 )
 
 from devpipe.models.feature_name import normalize_feature_name
+from devpipe.models.skills import SkillsInstallError
+from devpipe.services.skills_service import SkillsService
 
 NAME_PLACEHOLDER = "Feature name"
 SAVE_TEXT = "Save"
 NEW_WORKTREE_TEXT = "Create new worktree"
+INSTALL_SKILLS_TEXT = "Install/Update skills"
 OPEN_TEXT = "Open a pipeline"
 CREATE_TEXT = "Create a pipeline"
 BIG_BUTTON_MIN_WIDTH = 320
@@ -40,6 +45,10 @@ FOLDER_NOT_FOUND_TITLE = "Folder not found"
 FOLDER_NOT_FOUND_TEXT = "Folder not found: {path}"
 CANNOT_OPEN_FOLDER_TITLE = "Cannot open folder"
 CANNOT_OPEN_FOLDER_TEXT = "Cannot open folder: {path}"
+SKILLS_DIALOG_TITLE = "Install/Update skills: choose the agent's skills folder"
+SKILLS_ERROR_TITLE = "Cannot install skills"
+SKILLS_DONE_TITLE = "Skills installed"
+SKILLS_DONE_TEXT = "Skills installed in:\n{path}"
 
 
 class StartPanel(QWidget):
@@ -47,8 +56,9 @@ class StartPanel(QWidget):
     new_worktree_requested = Signal()  # emitted when "Create new worktree" is clicked
     remove_worktree_requested = Signal(object)  # emitted with the selected Path when "x" is clicked
 
-    def __init__(self) -> None:
+    def __init__(self, skills: SkillsService) -> None:
         super().__init__()
+        self._skills = skills
         self._saved = False
         self._slug = ""
 
@@ -60,6 +70,7 @@ class StartPanel(QWidget):
         font.setPointSize(font.pointSize() + SLUG_FONT_POINT_DELTA)
         self.slug_label.setFont(font)
         self.new_worktree_button = self._big_button(NEW_WORKTREE_TEXT)
+        self.install_skills_button = self._big_button(INSTALL_SKILLS_TEXT)
         self.open_button = self._big_button(OPEN_TEXT)
         self.create_button = self._big_button(CREATE_TEXT)
         self.new_worktree_button.setEnabled(False)
@@ -82,6 +93,7 @@ class StartPanel(QWidget):
         buttons = QVBoxLayout()
         buttons.setAlignment(Qt.AlignmentFlag.AlignCenter)
         buttons.setSpacing(BIG_BUTTON_SPACING)
+        buttons.addWidget(self.install_skills_button)
         buttons.addWidget(self.new_worktree_button)
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.create_button)
@@ -100,6 +112,7 @@ class StartPanel(QWidget):
         self.name_input.textChanged.connect(self._on_name_changed)
         self.save_button.clicked.connect(self._on_save_clicked)
         self.new_worktree_button.clicked.connect(lambda: self.new_worktree_requested.emit())
+        self.install_skills_button.clicked.connect(self._on_install_skills_clicked)
         self.worktrees_list.itemDoubleClicked.connect(self._on_worktree_double_clicked)
         self.worktrees_list.currentItemChanged.connect(self._refresh_remove_enabled)
         self.remove_worktree_button.clicked.connect(self._on_remove_worktree_clicked)
@@ -132,6 +145,20 @@ class StartPanel(QWidget):
         self.remove_worktree_button.setVisible(visible)
         self.worktrees_list.setVisible(visible)
         self._refresh_remove_enabled()
+
+    def _on_install_skills_clicked(self) -> None:
+        """Ask for a destination folder, then copy the skills into it, replacing
+        anything of the same name; report success or the error."""
+        selected = QFileDialog.getExistingDirectory(self, SKILLS_DIALOG_TITLE, str(Path.home()))
+        if selected == "":
+            return
+        destination = Path(selected)
+        try:
+            self._skills.install(destination)
+        except SkillsInstallError as error:
+            QMessageBox.warning(self, SKILLS_ERROR_TITLE, f"{error.path}\n\n{error.reason}")
+            return
+        QMessageBox.information(self, SKILLS_DONE_TITLE, SKILLS_DONE_TEXT.format(path=destination))
 
     def _on_remove_worktree_clicked(self) -> None:
         item = self.worktrees_list.currentItem()

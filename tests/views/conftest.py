@@ -7,8 +7,10 @@ import pytest
 
 from devpipe.models.worktree import GitWorktreeError
 from devpipe.persistence.config_repository import ConfigRepository
+from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.persistence.tab_state_repository import TabStateRepository
 from devpipe.services.session_service import SessionService
+from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.services.worktree_service import WorktreeService
@@ -88,7 +90,11 @@ def make_window(qtbot, tmp_path, tab_states, worktree_service) -> Callable[[], M
     def make() -> MainWindow:
         config = ConfigRepository(tmp_path / "config.json")
         window = MainWindow(
-            WindowStateService(config), tab_states, SessionService(config), worktree_service
+            WindowStateService(config),
+            tab_states,
+            SessionService(config),
+            worktree_service,
+            SkillsService(SkillsFiles(), tmp_path / "ai-skills"),  # skills flow: test_install_skills.py
         )
         qtbot.addWidget(window)
         return window

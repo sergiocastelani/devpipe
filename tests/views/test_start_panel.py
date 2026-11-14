@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout
 
+from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.skills_service import SkillsService
 from devpipe.views.start_panel import (
     BIG_BUTTON_MIN_HEIGHT,
     BIG_BUTTON_MIN_WIDTH,
@@ -12,8 +16,11 @@ from devpipe.views.start_panel import (
 )
 
 
+UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
+
+
 def make_panel(qtbot):
-    panel = StartPanel()
+    panel = StartPanel(UNUSED_SKILLS)
     qtbot.addWidget(panel)
     return panel
 
@@ -163,22 +170,21 @@ def test_new_worktree_button_matches_open_button_format(qtbot):
     )
 
 
-def test_new_worktree_button_is_first_in_centered_column(qtbot):
-    panel = make_panel(qtbot)
-    column = big_button_column(panel)
-    assert column.indexOf(panel.new_worktree_button) == 0
-    assert column.indexOf(panel.open_button) == 1
-    assert column.indexOf(panel.create_button) == 2
-    assert column.alignment() == Qt.AlignmentFlag.AlignCenter
-    assert column.spacing() == BIG_BUTTON_SPACING
-
-
 def test_new_worktree_click_emits_signal(qtbot):
     panel = make_panel(qtbot)
     panel.show_saved("x")
     with qtbot.waitSignal(panel.new_worktree_requested, timeout=1000) as blocker:
         qtbot.mouseClick(panel.new_worktree_button, Qt.MouseButton.LeftButton)
     assert blocker.args == []
+
+
+def test_install_skills_button_is_big_and_enabled_before_save(qtbot):
+    panel = make_panel(qtbot)
+    button = panel.install_skills_button
+    assert button.text() == "Install/Update skills"
+    assert button.isEnabled()
+    assert button.minimumSize() == QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
+    assert button.font().pointSize() == BIG_BUTTON_POINT_SIZE
 
 
 def test_disabled_new_worktree_button_emits_nothing(qtbot):

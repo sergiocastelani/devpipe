@@ -10,15 +10,20 @@ from PySide6.QtWidgets import QApplication
 
 from devpipe.infrastructure.git_worktrees import SubprocessGitWorktrees
 from devpipe.persistence.config_repository import ConfigRepository
+from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.persistence.tab_state_repository import TabStateRepository
 from devpipe.services.session_service import SessionService
+from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.main_window import MainWindow
 
 # config.json lives in the devpipe project folder (src/devpipe/app.py -> ../../).
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
+PROJECT_FOLDER = Path(__file__).resolve().parents[2]
+CONFIG_PATH = PROJECT_FOLDER / "config.json"
+# The agent skills the "Install/Update skills" button copies.
+SKILLS_FOLDER = PROJECT_FOLDER / "ai-skills"
 
 
 def main() -> int:
@@ -29,6 +34,7 @@ def main() -> int:
         TabStateService(TabStateRepository()),
         SessionService(config),
         WorktreeService(SubprocessGitWorktrees()),
+        SkillsService(SkillsFiles(), SKILLS_FOLDER),
     )
     window.show_initial()
     return app.exec()

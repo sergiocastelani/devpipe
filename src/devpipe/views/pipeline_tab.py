@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
 from devpipe.models.worktree import WorktreeRequest, WorktreeResult
+from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.new_worktree_panel import NewWorktreePanel
@@ -26,7 +27,9 @@ class PipelineTab(QWidget):
     identity_changed = Signal()  # emitted after title() or tooltip() change
     run_finished = Signal()  # emitted after a run's outcome was applied (results, recovery or warning)
 
-    def __init__(self, tab_states: TabStateService, worktrees: WorktreeService) -> None:
+    def __init__(
+        self, tab_states: TabStateService, worktrees: WorktreeService, skills: SkillsService
+    ) -> None:
         super().__init__()
         self._tab_states = tab_states
         self._worktree_service = worktrees  # `_worktrees` holds the path list
@@ -39,7 +42,7 @@ class PipelineTab(QWidget):
         self._worktrees: list[Path] = []
 
         self.stack = QStackedWidget()
-        self.start_panel = StartPanel()
+        self.start_panel = StartPanel(skills)
         self.stack.addWidget(self.start_panel)
         self.new_worktree_panel = NewWorktreePanel()
         self.stack.addWidget(self.new_worktree_panel)
