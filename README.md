@@ -64,8 +64,8 @@ Useful variants:
 
 ```sh
 uv run pytest -v                          # list each test
-uv run pytest tests/views/test_start_tab.py  # one file
-uv run pytest -k start_tab                # tests whose name matches
+uv run pytest tests/views/test_start_panel.py  # one file
+uv run pytest -k start_panel                # tests whose name matches
 ```
 
 On a machine with no display (for example a Linux CI runner), run Qt
