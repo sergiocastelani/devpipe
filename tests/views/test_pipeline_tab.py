@@ -328,3 +328,51 @@ def test_open_new_worktree_panel_prefills_folder_name(qtbot, tab_states, worktre
         "worktree-feat-x",
         "worktree-feat-x",
     ]
+
+
+def test_remove_worktree_updates_list_and_state_file(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    b = tmp_path / "wt" / "b"
+    a.mkdir(parents=True)
+    tab.apply_saved(path, TabState("x", Panel.START, [a, b]))
+    tab.start_panel.worktrees_list.setCurrentRow(0)
+    qtbot.mouseClick(tab.start_panel.remove_worktree_button, Qt.MouseButton.LeftButton)
+    assert worktree_texts(tab) == [str(b)]
+    assert read_json(path) == {**EXPECTED_FILE, "worktrees": [str(b)]}
+    assert a.is_dir()  # only the list entry is removed, never the folder
+
+
+def test_remove_last_worktree_hides_list(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    tab.apply_saved(path, TabState("x", Panel.START, [a]))
+    tab.remove_worktree(a)
+    assert tab.start_panel.worktrees_list.isHidden()
+    assert read_json(path) == EXPECTED_FILE
+
+
+def test_remove_unknown_worktree_writes_nothing(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    tab.apply_saved(path, TabState("x", Panel.START, [a]))
+    tab.remove_worktree(tmp_path / "wt" / "other")
+    assert not path.exists()
+    assert worktree_texts(tab) == [str(a)]
+
+
+def test_remove_worktree_write_failure_warns_and_keeps_removal(qtbot, tab_states, worktree_service, tmp_path, warnings):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "missing-dir" / "x.json"
+    a = tmp_path / "wt" / "a"
+    b = tmp_path / "wt" / "b"
+    tab.apply_saved(path, TabState("x", Panel.START, [a, b]))
+    tab.remove_worktree(a)
+    assert len(warnings) == 1
+    assert worktree_texts(tab) == [str(b)]
+    path.parent.mkdir()
+    tab.show_panel(Panel.START)
+    assert read_json(path)["worktrees"] == [str(b)]

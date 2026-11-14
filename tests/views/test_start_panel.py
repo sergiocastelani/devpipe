@@ -234,8 +234,42 @@ def test_show_worktrees_does_not_keep_caller_list(qtbot, tmp_path):
 def test_worktrees_are_below_the_big_buttons(qtbot):
     panel = make_panel(qtbot)
     layout = panel.layout()
-    assert layout.indexOf(panel.worktrees_label) == layout.count() - 2
+    header = layout.itemAt(layout.count() - 2).layout()
+    assert header is not None
+    assert header.indexOf(panel.worktrees_label) == 0
+    assert header.indexOf(panel.remove_worktree_button) == 1
     assert layout.indexOf(panel.worktrees_list) == layout.count() - 1
+
+
+def test_remove_button_hidden_with_the_list(qtbot, tmp_path):
+    panel = make_panel(qtbot)
+    assert panel.remove_worktree_button.isHidden()
+    assert panel.remove_worktree_button.text() == "x"
+    panel.show_worktrees([tmp_path / "a"])
+    assert not panel.remove_worktree_button.isHidden()
+    panel.show_worktrees([])
+    assert panel.remove_worktree_button.isHidden()
+
+
+def test_remove_button_enabled_only_with_a_selection(qtbot, tmp_path):
+    panel = make_panel(qtbot)
+    panel.show_worktrees([tmp_path / "a", tmp_path / "b"])
+    assert not panel.remove_worktree_button.isEnabled()
+    panel.worktrees_list.setCurrentRow(1)
+    assert panel.remove_worktree_button.isEnabled()
+    panel.show_worktrees([tmp_path / "a"])
+    assert not panel.remove_worktree_button.isEnabled()
+
+
+def test_remove_button_emits_selected_path(qtbot, tmp_path):
+    panel = make_panel(qtbot)
+    a, b = tmp_path / "a", tmp_path / "b"
+    panel.show_worktrees([a, b])
+    panel.worktrees_list.setCurrentRow(1)
+    with qtbot.waitSignal(panel.remove_worktree_requested) as blocker:
+        qtbot.mouseClick(panel.remove_worktree_button, Qt.MouseButton.LeftButton)
+    assert blocker.args == [b]
+    assert panel.worktrees_list.count() == 2  # the panel does not remove it itself
 
 
 def test_double_click_existing_folder_opens_it(qtbot, tmp_path, opened_urls, warnings):

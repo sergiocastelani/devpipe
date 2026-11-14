@@ -1,5 +1,6 @@
 """First panel of a pipeline tab: feature name, Save, and the start buttons, and,
-at the bottom, the tab's worktree folders (double-click opens one in the file explorer).
+at the bottom, the tab's worktree folders (double-click opens one in the file explorer;
+the "x" button asks the tab to remove the selected one from the list).
 
 "Create new worktree" asks the tab to open the New worktree panel. What "Open a pipeline" and "Create a pipeline" do is not decided yet.
 """
@@ -33,6 +34,8 @@ BIG_BUTTON_POINT_SIZE = 16
 BIG_BUTTON_SPACING = 24
 SLUG_FONT_POINT_DELTA = -1
 WORKTREES_LABEL_TEXT = "Worktrees"
+REMOVE_WORKTREE_TEXT = "x"
+REMOVE_WORKTREE_TOOLTIP = "Remove the selected worktree from the list (the folder is kept)"
 FOLDER_NOT_FOUND_TITLE = "Folder not found"
 FOLDER_NOT_FOUND_TEXT = "Folder not found: {path}"
 CANNOT_OPEN_FOLDER_TITLE = "Cannot open folder"
@@ -42,6 +45,7 @@ CANNOT_OPEN_FOLDER_TEXT = "Cannot open folder: {path}"
 class StartPanel(QWidget):
     save_requested = Signal(str)  # emitted with the current slug when Save is clicked
     new_worktree_requested = Signal()  # emitted when "Create new worktree" is clicked
+    remove_worktree_requested = Signal(object)  # emitted with the selected Path when "x" is clicked
 
     def __init__(self) -> None:
         super().__init__()
@@ -65,6 +69,11 @@ class StartPanel(QWidget):
         self.worktrees_list = QListWidget()
         self.worktrees_list.setAccessibleName(WORKTREES_LABEL_TEXT)
         self.worktrees_label.setBuddy(self.worktrees_list)
+        self.remove_worktree_button = QPushButton(REMOVE_WORKTREE_TEXT)
+        self.remove_worktree_button.setToolTip(REMOVE_WORKTREE_TOOLTIP)
+        self.remove_worktree_button.setAccessibleName(REMOVE_WORKTREE_TOOLTIP)
+        self.remove_worktree_button.setFixedWidth(self.remove_worktree_button.sizeHint().height())
+        self.remove_worktree_button.setEnabled(False)
 
         name_row = QHBoxLayout()
         name_row.addWidget(self.name_input, 1)
@@ -77,17 +86,23 @@ class StartPanel(QWidget):
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.create_button)
 
+        worktrees_header = QHBoxLayout()
+        worktrees_header.addWidget(self.worktrees_label, 1)
+        worktrees_header.addWidget(self.remove_worktree_button, 0)
+
         layout = QVBoxLayout(self)
         layout.addLayout(name_row)
         layout.addWidget(self.slug_label)
         layout.addLayout(buttons, 1)
-        layout.addWidget(self.worktrees_label)
+        layout.addLayout(worktrees_header)
         layout.addWidget(self.worktrees_list)
 
         self.name_input.textChanged.connect(self._on_name_changed)
         self.save_button.clicked.connect(self._on_save_clicked)
         self.new_worktree_button.clicked.connect(lambda: self.new_worktree_requested.emit())
         self.worktrees_list.itemDoubleClicked.connect(self._on_worktree_double_clicked)
+        self.worktrees_list.currentItemChanged.connect(self._refresh_remove_enabled)
+        self.remove_worktree_button.clicked.connect(self._on_remove_worktree_clicked)
         self._refresh_save_enabled()
         self.show_worktrees([])
 
@@ -104,15 +119,27 @@ class StartPanel(QWidget):
     def show_worktrees(self, paths: list[Path]) -> None:
         """Replace the worktree list with `paths` (shown as str(path)), in order.
 
-        The label and the list are shown when `paths` is non-empty, hidden otherwise.
+        The label, the "x" button and the list are shown when `paths` is non-empty,
+        hidden otherwise. No entry is selected afterwards, so "x" is disabled.
         May be called any number of times; `paths` is not kept or modified.
         """
         self.worktrees_list.clear()
         for path in paths:
             self.worktrees_list.addItem(str(path))
+        self.worktrees_list.setCurrentRow(-1)
         visible = bool(paths)
         self.worktrees_label.setVisible(visible)
+        self.remove_worktree_button.setVisible(visible)
         self.worktrees_list.setVisible(visible)
+        self._refresh_remove_enabled()
+
+    def _on_remove_worktree_clicked(self) -> None:
+        item = self.worktrees_list.currentItem()
+        if item is not None:
+            self.remove_worktree_requested.emit(Path(item.text()))
+
+    def _refresh_remove_enabled(self) -> None:
+        self.remove_worktree_button.setEnabled(self.worktrees_list.currentItem() is not None)
 
     def _on_worktree_double_clicked(self, item: QListWidgetItem) -> None:
         """Open the entry's folder in the file explorer; warn when it does not exist or the OS cannot open it."""

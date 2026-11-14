@@ -55,6 +55,7 @@ class PipelineTab(QWidget):
         layout.addWidget(self.stack)
 
         self.start_panel.new_worktree_requested.connect(self.open_new_worktree_panel)
+        self.start_panel.remove_worktree_requested.connect(self.remove_worktree)
         self.new_worktree_panel.create_requested.connect(self._start_run)
 
     @property
@@ -97,6 +98,19 @@ class PipelineTab(QWidget):
         """
         self.new_worktree_panel.reset(self._feature_name or "")
         self.show_panel(Panel.NEW_WORKTREE)
+
+    def remove_worktree(self, path: Path) -> None:
+        """Drop `path` from the tab's worktree list (the folder itself is untouched) and,
+        when saved, rewrite the state file. Ignored when `path` is not in the list.
+
+        A failed write shows a warning; the path stays removed and the next write persists it.
+        """
+        if path not in self._worktrees:
+            return
+        self._worktrees = [p for p in self._worktrees if p != path]
+        self.start_panel.show_worktrees(self._worktrees)
+        if self._state_path is not None:
+            self._write(self._state_path, self._current_state())
 
     def apply_saved(self, path: Path, state: TabState) -> None:
         """Put the tab in saved mode for `path` and `state` without writing."""
