@@ -4,9 +4,9 @@
 
 | Step | File | Status | Rounds | Checkpoint | Notes |
 |------|------|--------|--------|-----------|-------|
-| S01 | [step-01.md](step-01.md) | done | 1 | (this commit) | - |
+| S01 | [step-01.md](step-01.md) | done | 1 | a2ded7a | - |
 | S02 | [step-02.md](step-02.md) | pending | 0 | - | - |
-| S03 | [step-03.md](step-03.md) | pending | 0 | - | - |
+| S03 | [step-03.md](step-03.md) | done | 1 | 4160ae8 | - |
 | S04 | [step-04.md](step-04.md) | pending | 0 | - | - |
 | S05 | [step-05.md](step-05.md) | pending | 0 | - | - |
 | S06 | [step-06.md](step-06.md) | pending | 0 | - | - |
