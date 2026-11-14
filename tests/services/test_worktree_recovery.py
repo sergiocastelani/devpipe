@@ -50,7 +50,7 @@ def make_request(tmp_path: Path, name: str) -> WorktreeRequest:
     wt = tmp_path / name / "wt"
     src.mkdir(parents=True)
     wt.mkdir(parents=True)
-    return WorktreeRequest(src, wt)
+    return WorktreeRequest(src, wt, FEATURE)
 
 
 def target(req: WorktreeRequest) -> Path:
@@ -179,8 +179,8 @@ def test_recover_does_not_clean_target_of_verified_entry(tmp_path, git, service)
     src2 = tmp_path / "src2"
     src1.mkdir()
     src2.mkdir()
-    r1 = WorktreeRequest(src1, parent)
-    r2 = WorktreeRequest(src2, parent)
+    r1 = WorktreeRequest(src1, parent, FEATURE)
+    r2 = WorktreeRequest(src2, parent, FEATURE)
     t = target(r1)
     git.worktrees = {(r1.source.resolve(), t)}
 
@@ -208,3 +208,12 @@ def test_recover_invalid_feature_name_raises(tmp_path, git, service):
     with pytest.raises(ValueError):
         service.recover("Bad", [state(r1)], E)
     assert git.calls == []
+
+
+def test_snapshot_invalid_folder_name_counts_as_existing(tmp_path, service):
+    src = tmp_path / "src"
+    wt = tmp_path / "wt"
+    src.mkdir()
+    wt.mkdir()
+    [entry] = service.snapshot(FEATURE, [WorktreeRequest(src, wt, "a/b")])
+    assert entry.target_existed is True

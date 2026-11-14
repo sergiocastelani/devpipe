@@ -12,7 +12,7 @@ from devpipe.models.worktree import (
 
 
 def _request() -> WorktreeRequest:
-    return WorktreeRequest(Path("src"), Path("wt"))
+    return WorktreeRequest(Path("src"), Path("wt"), "feat-x")
 
 
 def test_result_ok_when_no_error():
@@ -35,8 +35,8 @@ def test_request_and_result_are_frozen():
 
 
 def test_request_value_equality():
-    a = WorktreeRequest(Path("src"), Path("wt"))
-    b = WorktreeRequest(Path("src"), Path("wt"))
+    a = WorktreeRequest(Path("src"), Path("wt"), "feat-x")
+    b = WorktreeRequest(Path("src"), Path("wt"), "feat-x")
     assert a == b
     assert hash(a) == hash(b)
 
@@ -60,3 +60,30 @@ def test_pre_run_state_is_frozen_value():
     assert a.branch_existed is True
     with pytest.raises(FrozenInstanceError):
         a.target_existed = True
+
+
+def test_default_folder_name():
+    from devpipe.models.worktree import default_folder_name
+
+    assert default_folder_name("feat-x") == "worktree-feat-x"
+
+
+@pytest.mark.parametrize("name", ["wt", "worktree-feat-x", "a.b", "a b"])
+def test_valid_folder_names(name):
+    from devpipe.models.worktree import is_valid_folder_name
+
+    assert is_valid_folder_name(name)
+
+
+@pytest.mark.parametrize(
+    "name", ["", ".", "..", "a/b", "a\b", "a:b", "a<b", "a>b", 'a"b', "a|b", "a?b", "a*b", "a.", "a ", "a\x00"]
+)
+def test_invalid_folder_names(name):
+    from devpipe.models.worktree import is_valid_folder_name
+
+    assert not is_valid_folder_name(name)
+
+
+def test_request_target_is_parent_slash_folder_name_resolved():
+    req = WorktreeRequest(Path("wt"), Path("parent"), "my-folder")
+    assert req.target() == (Path("parent") / "my-folder").resolve()

@@ -14,9 +14,10 @@ def make_panel(qtbot):
     return panel
 
 
-def fill(group, source="C:/src", parent="C:/wt"):
+def fill(group, source="C:/src", parent="C:/wt", folder_name="wt-x"):
     group.source_input.setText(source)
     group.parent_input.setText(parent)
+    group.folder_name_input.setText(folder_name)
 
 
 def add_groups(qtbot, panel, total):
@@ -124,8 +125,8 @@ def test_removed_group_not_in_requests(qtbot):
     qtbot.mouseClick(groups[1].remove_button, Qt.MouseButton.LeftButton)
     args = click_create(qtbot, panel)
     assert args[0] == [
-        WorktreeRequest(Path("A"), Path("B")),
-        WorktreeRequest(Path("E"), Path("F")),
+        WorktreeRequest(Path("A"), Path("B"), "wt-x"),
+        WorktreeRequest(Path("E"), Path("F"), "wt-x"),
     ]
 
 
@@ -144,9 +145,48 @@ def test_create_enabled_only_when_all_editable_groups_filled(qtbot):
     second.source_input.setText("C:/src2")
     assert not panel.create_button.isEnabled()
     second.parent_input.setText("C:/wt2")
+    assert not panel.create_button.isEnabled()  # standalone panel: folder name not pre-filled
+    second.folder_name_input.setText("wt-2")
     assert panel.create_button.isEnabled()
     first.parent_input.setText("")
     assert not panel.create_button.isEnabled()
+
+
+def test_reset_with_feature_name_prefills_folder_name_of_each_group(qtbot):
+    panel = make_panel(qtbot)
+    panel.reset("feat-x")
+    [first] = panel.groups()
+    assert first.folder_name_input.text() == "worktree-feat-x"
+    _, second = add_groups(qtbot, panel, 2)
+    assert second.folder_name_input.text() == "worktree-feat-x"
+    fill(first, folder_name="custom")
+    fill(second, folder_name=" worktree-feat-x ")
+    [args] = click_create(qtbot, panel)
+    assert [request.folder_name for request in args] == ["custom", "worktree-feat-x"]
+
+
+def test_folder_name_label_is_buddy_of_its_input(qtbot):
+    panel = make_panel(qtbot)
+    group = panel.groups()[0]
+    labels = [label for label in group.findChildren(QLabel) if label.text() == "Worktree folder name"]
+    assert len(labels) == 1
+    assert labels[0].buddy() is group.folder_name_input
+
+
+@pytest.mark.parametrize("name", ["", "  ", ".", "..", "a/b", "a\\b", "a:b", "a*", "end.", "x\x01"])
+def test_invalid_folder_name_disables_create(qtbot, name):
+    panel = make_panel(qtbot)
+    fill(panel.groups()[0], folder_name=name)
+    assert not panel.create_button.isEnabled()
+
+
+def test_locked_group_has_read_only_folder_name(qtbot):
+    panel = make_panel(qtbot)
+    group = panel.groups()[0]
+    group.set_locked(True)
+    assert group.folder_name_input.isReadOnly()
+    group.set_locked(False)
+    assert not group.folder_name_input.isReadOnly()
 
 
 @pytest.mark.parametrize("blank", [" ", "\t "])
@@ -171,7 +211,7 @@ def test_create_emits_trimmed_requests_in_order(qtbot):
     fill(first, "  A  ", "B")
     fill(second, "C", " D")
     args = click_create(qtbot, panel)
-    assert args == [[WorktreeRequest(Path("A"), Path("B")), WorktreeRequest(Path("C"), Path("D"))]]
+    assert args == [[WorktreeRequest(Path("A"), Path("B"), "wt-x"), WorktreeRequest(Path("C"), Path("D"), "wt-x")]]
 
 
 def test_picker_writes_chosen_folder(qtbot, dialog, tmp_path):
@@ -260,7 +300,7 @@ def test_locked_group_excluded_from_check_and_requests(qtbot):
     assert panel.editable_groups() == [second]
     assert panel.create_button.isEnabled()
     args = click_create(qtbot, panel)
-    assert args == [[WorktreeRequest(Path("S"), Path("P"))]]
+    assert args == [[WorktreeRequest(Path("S"), Path("P"), "wt-x")]]
 
 
 def test_locking_refreshes_create(qtbot):

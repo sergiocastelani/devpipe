@@ -33,7 +33,7 @@ def make_request(tmp_path: Path, name: str) -> WorktreeRequest:
     wt = tmp_path / name / "wt"
     src.mkdir(parents=True)
     wt.mkdir(parents=True)
-    return WorktreeRequest(src, wt)
+    return WorktreeRequest(src, wt, FEATURE)
 
 
 def _target(request: WorktreeRequest) -> Path:
@@ -74,7 +74,7 @@ def test_invalid_feature_name_raises(tmp_path, name):
 def test_missing_source_fails_without_git(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
-    request = WorktreeRequest(tmp_path / "missing", wt)
+    request = WorktreeRequest(tmp_path / "missing", wt, FEATURE)
     fake = FakeGitWorktrees()
 
     [result] = WorktreeService(fake).create_worktrees(FEATURE, [request])
@@ -91,7 +91,7 @@ def test_source_file_counts_as_missing(tmp_path):
     wt.mkdir()
     fake = FakeGitWorktrees()
 
-    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, wt)])
+    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, wt, FEATURE)])
 
     assert result.error == "source folder does not exist"
     assert fake.calls == []
@@ -103,7 +103,7 @@ def test_missing_parent_fails_and_is_not_created(tmp_path):
     parent = tmp_path / "missing"
     fake = FakeGitWorktrees()
 
-    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, parent)])
+    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, parent, FEATURE)])
 
     assert result.error == PARENT_MISSING_MESSAGE == "parent folder does not exist"
     assert not parent.exists()
@@ -117,7 +117,7 @@ def test_parent_file_counts_as_missing(tmp_path):
     parent.write_text("x", encoding="utf-8")
     fake = FakeGitWorktrees()
 
-    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, parent)])
+    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, parent, FEATURE)])
 
     assert result.error == "parent folder does not exist"
     assert fake.calls == []
@@ -135,7 +135,7 @@ def test_existing_target_fails_without_git(tmp_path):
 
 
 def test_first_failing_check_wins(tmp_path):
-    request = WorktreeRequest(tmp_path / "no-src", tmp_path / "no-wt")
+    request = WorktreeRequest(tmp_path / "no-src", tmp_path / "no-wt", FEATURE)
     fake = FakeGitWorktrees()
 
     [result] = WorktreeService(fake).create_worktrees(FEATURE, [request])
@@ -158,7 +158,7 @@ def test_git_error_is_reported_and_run_continues(tmp_path):
 def test_precheck_failure_does_not_stop_later_requests(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
-    first = WorktreeRequest(tmp_path / "missing", wt)
+    first = WorktreeRequest(tmp_path / "missing", wt, FEATURE)
     second = make_request(tmp_path, "two")
     fake = FakeGitWorktrees()
 
@@ -179,7 +179,7 @@ def test_same_parent_second_request_fails(tmp_path):
     fake = FakeGitWorktrees()
 
     results = WorktreeService(fake).create_worktrees(
-        FEATURE, [WorktreeRequest(src1, wt), WorktreeRequest(src2, wt)]
+        FEATURE, [WorktreeRequest(src1, wt, FEATURE), WorktreeRequest(src2, wt, FEATURE)]
     )
 
     assert results[0].ok
@@ -194,7 +194,7 @@ def test_relative_paths_are_resolved(tmp_path, monkeypatch):
     fake = FakeGitWorktrees()
 
     [result] = WorktreeService(fake).create_worktrees(
-        FEATURE, [WorktreeRequest(Path("src"), Path("wt"))]
+        FEATURE, [WorktreeRequest(Path("src"), Path("wt"), FEATURE)]
     )
 
     assert result.target == (tmp_path / "wt" / FEATURE).resolve()
@@ -238,3 +238,31 @@ def test_merge_paths_empty():
     merged = service.merge_paths(existing, [])
     assert merged == []
     assert merged is not existing
+
+
+def test_target_uses_request_folder_name_and_branch_uses_feature(tmp_path):
+    src = tmp_path / "src"
+    wt = tmp_path / "wt"
+    src.mkdir()
+    wt.mkdir()
+    fake = FakeGitWorktrees()
+    [result] = WorktreeService(fake).create_worktrees(
+        FEATURE, [WorktreeRequest(src, wt, "worktree-feat-x")]
+    )
+    assert result.ok
+    assert result.target == (wt / "worktree-feat-x").resolve()
+    assert fake.calls == [(src.resolve(), FEATURE, (wt / "worktree-feat-x").resolve())]
+
+
+@pytest.mark.parametrize("folder_name", ["", "..", "a/b", "a:b"])
+def test_invalid_folder_name_fails_without_git(tmp_path, folder_name):
+    from devpipe.services.worktree_service import INVALID_FOLDER_NAME_MESSAGE
+
+    src = tmp_path / "src"
+    wt = tmp_path / "wt"
+    src.mkdir()
+    wt.mkdir()
+    fake = FakeGitWorktrees()
+    [result] = WorktreeService(fake).create_worktrees(FEATURE, [WorktreeRequest(src, wt, folder_name)])
+    assert result.error == INVALID_FOLDER_NAME_MESSAGE
+    assert fake.calls == []

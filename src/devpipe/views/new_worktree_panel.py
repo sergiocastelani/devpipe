@@ -1,4 +1,4 @@
-"""New worktree panel: groups of (source project, worktree parent) folders and Create."""
+"""New worktree panel: groups of (source project, worktree parent, folder name) and Create."""
 
 from functools import partial
 from pathlib import Path
@@ -20,10 +20,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from devpipe.models.worktree import WorktreeRequest, WorktreeResult
+from devpipe.models.worktree import (
+    WorktreeRequest,
+    WorktreeResult,
+    default_folder_name,
+    is_valid_folder_name,
+)
 
 SOURCE_LABEL_TEXT = "Source project folder"
 PARENT_LABEL_TEXT = "Worktree parent folder"
+FOLDER_NAME_LABEL_TEXT = "Worktree folder name"
 SOURCE_PICKER_TOOLTIP = "Choose source project folder"
 PARENT_PICKER_TOOLTIP = "Choose worktree parent folder"
 PICKER_TEXT = "..."
@@ -51,18 +57,20 @@ RESULT_STYLE = (
 
 
 class WorktreeGroup(QGroupBox):
-    """One (source project folder, worktree parent folder) pair."""
+    """One (source project folder, worktree parent folder, worktree folder name)."""
 
     changed = Signal()  # an input's text changed, or the lock state changed
     remove_requested = Signal()  # '-' was clicked
 
-    def __init__(self) -> None:
+    def __init__(self, folder_name: str = "") -> None:
+        """`folder_name` pre-fills the worktree folder name input."""
         super().__init__()
         self._locked = False
         self._removable = False
 
         self.source_input = QLineEdit()
         self.parent_input = QLineEdit()
+        self.folder_name_input = QLineEdit(folder_name)
         self.source_picker = self._tool_button(PICKER_TEXT, SOURCE_PICKER_TOOLTIP)
         self.parent_picker = self._tool_button(PICKER_TEXT, PARENT_PICKER_TOOLTIP)
         self.remove_button = self._tool_button(REMOVE_TEXT, REMOVE_TOOLTIP)
@@ -70,6 +78,8 @@ class WorktreeGroup(QGroupBox):
         source_label.setBuddy(self.source_input)
         parent_label = QLabel(PARENT_LABEL_TEXT)
         parent_label.setBuddy(self.parent_input)
+        folder_name_label = QLabel(FOLDER_NAME_LABEL_TEXT)
+        folder_name_label.setBuddy(self.folder_name_input)
 
         header = QHBoxLayout()
         header.addStretch(1)
@@ -82,6 +92,8 @@ class WorktreeGroup(QGroupBox):
         rows.addWidget(parent_label, 1, 0)
         rows.addWidget(self.parent_input, 1, 1)
         rows.addWidget(self.parent_picker, 1, 2)
+        rows.addWidget(folder_name_label, 2, 0)
+        rows.addWidget(self.folder_name_input, 2, 1)
         rows.setColumnStretch(1, 1)
 
         layout = QVBoxLayout(self)
@@ -90,6 +102,7 @@ class WorktreeGroup(QGroupBox):
 
         self.source_input.textChanged.connect(lambda _text: self.changed.emit())
         self.parent_input.textChanged.connect(lambda _text: self.changed.emit())
+        self.folder_name_input.textChanged.connect(lambda _text: self.changed.emit())
         self.source_picker.clicked.connect(
             lambda: self._choose_folder(self.source_input, SOURCE_PICKER_TOOLTIP)
         )  # drop the `checked` argument
@@ -114,14 +127,19 @@ class WorktreeGroup(QGroupBox):
         self._refresh_controls()
 
     def is_filled(self) -> bool:
-        """Both inputs are non-empty after trimming."""
-        return bool(self.source_input.text().strip()) and bool(self.parent_input.text().strip())
+        """Both folder inputs are non-empty and the folder name is valid, after trimming."""
+        return (
+            bool(self.source_input.text().strip())
+            and bool(self.parent_input.text().strip())
+            and is_valid_folder_name(self.folder_name_input.text().strip())
+        )
 
     def request(self) -> WorktreeRequest:
         """The group's request from the trimmed inputs. Precondition: `is_filled()`."""
         return WorktreeRequest(
             Path(self.source_input.text().strip()),
             Path(self.parent_input.text().strip()),
+            self.folder_name_input.text().strip(),
         )
 
     def _choose_folder(self, line_edit: QLineEdit, caption: str) -> None:
@@ -136,6 +154,7 @@ class WorktreeGroup(QGroupBox):
     def _refresh_controls(self) -> None:
         self.source_input.setReadOnly(self._locked)
         self.parent_input.setReadOnly(self._locked)
+        self.folder_name_input.setReadOnly(self._locked)
         self.source_picker.setEnabled(not self._locked)
         self.parent_picker.setEnabled(not self._locked)
         self.remove_button.setVisible(self._removable and not self._locked)
@@ -158,6 +177,7 @@ class NewWorktreePanel(QWidget):
         super().__init__()
         self._busy = False
         self._groups: list[WorktreeGroup] = []
+        self._default_folder_name = ""  # pre-fills the folder name of each new group
 
         groups_widget = QWidget()
         self._groups_layout = QVBoxLayout(groups_widget)
@@ -200,8 +220,13 @@ class NewWorktreePanel(QWidget):
         """Unlocked groups in display order."""
         return [group for group in self._groups if not group.is_locked()]
 
-    def reset(self) -> None:
-        """Start fresh: one empty unlocked group, no errors, "Create", not busy."""
+    def reset(self, feature_name: str = "") -> None:
+        """Start fresh: one empty unlocked group, no errors, "Create", not busy.
+
+        Groups added from now on pre-fill their folder name with
+        "worktree-<feature_name>" (left empty when `feature_name` is empty).
+        """
+        self._default_folder_name = default_folder_name(feature_name) if feature_name else ""
         for group in self._groups:
             self._discard(group)
         self._groups.clear()
@@ -231,7 +256,7 @@ class NewWorktreePanel(QWidget):
             self.create_button.setText(RETRY_TEXT)  # stays until reset()
 
     def _add_group(self) -> WorktreeGroup:
-        group = WorktreeGroup()
+        group = WorktreeGroup(self._default_folder_name)
         group.changed.connect(self._refresh_create_enabled)
         group.remove_requested.connect(partial(self._remove_group, group))
         self._groups_layout.insertWidget(len(self._groups), group)

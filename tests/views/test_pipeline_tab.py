@@ -316,3 +316,15 @@ def test_open_panel_write_failure_warns_and_shows_panel(qtbot, tab_states, workt
     folder.mkdir()
     tab.show_panel(Panel.START)
     assert read_json(path) == EXPECTED_FILE
+
+
+def test_open_new_worktree_panel_prefills_folder_name(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    tab.apply_saved(tmp_path / "x.json", TabState("feat-x"))
+    tab.open_new_worktree_panel()
+    panel = tab.new_worktree_panel
+    qtbot.mouseClick(panel.add_button, Qt.MouseButton.LeftButton)
+    assert [group.folder_name_input.text() for group in panel.groups()] == [
+        "worktree-feat-x",
+        "worktree-feat-x",
+    ]

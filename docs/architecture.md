@@ -32,7 +32,7 @@ src/devpipe/
 ├── services/
 └── views/
     ├── main_window.py         # window, tab bar with "+" and closable tabs
-    ├── new_worktree_panel.py  # New worktree panel: folder groups, '+', Create
+    ├── new_worktree_panel.py  # New worktree panel: folder groups (source, parent, folder name), '+', Create
     ├── pipeline_tab.py        # one tab: a stack of panels
     ├── start_panel.py         # first panel: feature name, Save, start buttons
     └── worktree_worker.py     # background thread running one worktree creation

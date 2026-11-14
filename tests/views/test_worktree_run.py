@@ -14,6 +14,7 @@ from devpipe.views.worktree_worker import WorktreeWorker
 
 RUN_TIMEOUT_MS = 5000
 FEATURE = "feat-x"
+FOLDER = f"worktree-{FEATURE}"
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ def fill(tab, tmp_path, n) -> list[Path]:
         wt.mkdir(exist_ok=True)
         group.source_input.setText(str(src))
         group.parent_input.setText(str(wt))
-        targets.append((wt / FEATURE).resolve())
+        targets.append((wt / FOLDER).resolve())
     return targets
 
 
@@ -200,7 +201,7 @@ def test_already_saved_target_is_not_duplicated(
     qtbot, tmp_path, tab_states, worktree_service, writes
 ):
     path = tmp_path / "x.json"
-    t0 = (tmp_path / "wt0" / FEATURE).resolve()
+    t0 = (tmp_path / "wt0" / FOLDER).resolve()
     tab = saved_tab(qtbot, tab_states, worktree_service, path, worktrees=[t0])
     assert fill(tab, tmp_path, 1) == [t0]
     run(qtbot, tab, writes)
@@ -347,7 +348,7 @@ def test_create_on_unsaved_tab_is_ignored(qtbot, tmp_path, tab_states, worktree_
     wt = tmp_path / "wt0"
     src.mkdir()
     wt.mkdir()
-    tab.new_worktree_panel.create_requested.emit([WorktreeRequest(src, wt)])
+    tab.new_worktree_panel.create_requested.emit([WorktreeRequest(src, wt, FOLDER)])
     assert not tab.run_in_progress
     assert tab.new_worktree_panel.progress_bar.isHidden()
     assert fake_git.calls == []
@@ -362,7 +363,7 @@ def test_worker_delivers_results(qtbot, tmp_path, worktree_service):
     wt = tmp_path / "wt0"
     src.mkdir()
     wt.mkdir()
-    request = WorktreeRequest(src, wt)
+    request = WorktreeRequest(src, wt, FOLDER)
     worker = WorktreeWorker(worktree_service, FEATURE, [request])
     try:
         with qtbot.waitSignal(worker.results_ready, timeout=RUN_TIMEOUT_MS) as blocker:
@@ -382,7 +383,7 @@ def test_worker_reports_error_type_without_message(qtbot, tmp_path, worktree_ser
     wt = tmp_path / "wt0"
     src.mkdir()
     wt.mkdir()
-    worker = WorktreeWorker(worktree_service, FEATURE, [WorktreeRequest(src, wt)])
+    worker = WorktreeWorker(worktree_service, FEATURE, [WorktreeRequest(src, wt, FOLDER)])
     try:
         with qtbot.waitSignal(worker.error_occurred, timeout=RUN_TIMEOUT_MS) as blocker:
             worker.start()

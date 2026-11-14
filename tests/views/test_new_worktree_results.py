@@ -22,17 +22,18 @@ def make_panel(qtbot):
     return panel
 
 
-def fill(group, source, parent="C:/wt"):
+def fill(group, source, parent="C:/wt", folder_name="worktree-feat-x"):
     group.source_input.setText(source)
     group.parent_input.setText(parent)
+    group.folder_name_input.setText(folder_name)
 
 
 def ok(group):
-    return WorktreeResult(group.request(), Path(group.parent_input.text()) / "feat-x", None)
+    return WorktreeResult(group.request(), group.request().target(), None)
 
 
 def failed(group, error="boom"):
-    return WorktreeResult(group.request(), Path(group.parent_input.text()) / "feat-x", error)
+    return WorktreeResult(group.request(), group.request().target(), error)
 
 
 def make_panel_with(qtbot, n):

@@ -90,11 +90,12 @@ class PipelineTab(QWidget):
             self._write(self._state_path, self._current_state())
 
     def open_new_worktree_panel(self) -> None:
-        """Show the New worktree panel, fresh (one empty group).
+        """Show the New worktree panel, fresh (one empty group, its folder name
+        pre-filled from the feature name).
 
         Uses show_panel, so a saved tab auto-saves; the file keeps active_panel "start".
         """
-        self.new_worktree_panel.reset()
+        self.new_worktree_panel.reset(self._feature_name or "")
         self.show_panel(Panel.NEW_WORKTREE)
 
     def apply_saved(self, path: Path, state: TabState) -> None:

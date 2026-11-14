@@ -1,4 +1,4 @@
-"""Create git worktrees named after a feature, and merge their paths (no Qt)."""
+"""Create git worktrees on a branch named after a feature, and merge their paths (no Qt)."""
 
 from pathlib import Path
 from typing import Protocol
@@ -9,11 +9,13 @@ from devpipe.models.worktree import (
     PreRunState,
     WorktreeRequest,
     WorktreeResult,
+    is_valid_folder_name,
 )
 from devpipe.services.paths import same_file
 
 SOURCE_MISSING_MESSAGE = "source folder does not exist"
 PARENT_MISSING_MESSAGE = "parent folder does not exist"
+INVALID_FOLDER_NAME_MESSAGE = "invalid worktree folder name"
 TARGET_EXISTS_MESSAGE = "target folder already exists"
 CLEANED_UP_MESSAGE = "unexpected error: {error}; cleaned up"
 CLEANUP_FAILED_MESSAGE = "unexpected error: {error}; cleanup failed: {cleanup_error}"
@@ -74,16 +76,19 @@ class WorktreeService:
         Raises ValueError for an invalid feature name (before any git call). Never raises
         for a per-request problem: a GitWorktreeError from branch_exists counts as
         branch_existed=True, so recovery never deletes a branch it could not check.
+        The worktree folder is `request.target()`; the branch is `feature_name`.
         """
         self._require_valid_feature_name(feature_name)
         states = []
         for request in requests:
-            target = (request.parent / feature_name).resolve()
+            target = request.target()
             try:
                 branch_existed = self._git.branch_exists(request.source.resolve(), feature_name)
             except GitWorktreeError:
                 branch_existed = True
-            states.append(PreRunState(request, target, target.exists(), branch_existed))
+            # An invalid folder name counts as existing, so recovery never touches it.
+            target_existed = not is_valid_folder_name(request.folder_name) or target.exists()
+            states.append(PreRunState(request, target, target_existed, branch_existed))
         return states
 
     def recover(
@@ -153,8 +158,8 @@ class WorktreeService:
 
     def _create_one(self, feature_name: str, request: WorktreeRequest) -> WorktreeResult:
         """Precheck, then call git; turn a GitWorktreeError into the result's error."""
-        target = (request.parent / feature_name).resolve()
-        error = self._precheck(request, target)
+        error = self._precheck(request)
+        target = request.target()
         if error is None:
             try:
                 self._git.add_worktree(request.source.resolve(), feature_name, target)
@@ -163,12 +168,14 @@ class WorktreeService:
         return WorktreeResult(request, target, error)
 
     @staticmethod
-    def _precheck(request: WorktreeRequest, target: Path) -> str | None:
+    def _precheck(request: WorktreeRequest) -> str | None:
         """The first failing check's message, or None when all checks pass."""
         if not request.source.is_dir():
             return SOURCE_MISSING_MESSAGE
         if not request.parent.is_dir():
             return PARENT_MISSING_MESSAGE
-        if target.exists():
+        if not is_valid_folder_name(request.folder_name):
+            return INVALID_FOLDER_NAME_MESSAGE
+        if request.target().exists():
             return TARGET_EXISTS_MESSAGE
         return None
