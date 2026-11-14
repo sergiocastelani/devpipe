@@ -8,7 +8,7 @@
 | S02 | [step-02.md](step-02.md) | done | 2 | 9643b58 | round 1: unwrapped ValueError/RecursionError from json.loads, fixed |
 | S03 | [step-03.md](step-03.md) | done | 2 | bab2ca9 | round 1: missing PEP 8 blank line in test_first_save.py, fixed |
 | S04 | [step-04.md](step-04.md) | done | 2 | dfe3f45 | round 1: NUL character in a session entry crashed startup, fixed |
-| S05 | [step-05.md](step-05.md) | in-progress | 0 | - | - |
+| S05 | [step-05.md](step-05.md) | done | 1 | 2c236ec | passed first review |
 
 Status: pending | in-progress | done | skipped | blocked
 
@@ -27,6 +27,7 @@ Deviations from a step file's implementation suggestions, as reported by its imp
 - (S04) `test_invalid_listed_file_is_skipped_silently_and_dropped` "missing" case checks the file still does not exist.
 - (S04) `_as_path` rejects strings containing a NUL character (also covers `last_state_folder`, no observable change); extra test `test_entries_with_nul_characters_are_ignored` (3 cases) and NUL rows in two persistence tests.
 - (S04) Known, out of scope (S02 reader): a session entry naming a DOS device such as `CON` hangs startup.
+- (S05) Open-dialog fake is an `OpenDialog` class (callable, settable `answer`, `calls` list), like `test_first_save.py`; extra helpers `valid_file` fixture and `open_saved_then_new(window, tmp_path)`.
 
 ## Checks pending for the user
 `needs-human` checks, collected from each step and verified by the user only after the run (section 4).
