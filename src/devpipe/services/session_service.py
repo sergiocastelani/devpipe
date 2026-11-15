@@ -2,12 +2,42 @@
 
 from pathlib import Path
 
+from devpipe.models.control_files import (
+    FEATURE_SPEC_FILE_NAME,
+    IMPLEMENTATION_LOG_FILE_NAME,
+    PLAN_FILE_NAME,
+    DevpipeStage,
+    feature_folder,
+)
+from devpipe.models.tab_state import TabState
+from devpipe.services.control_files_service import ControlFilesStore
 from devpipe.services.window_state_service import ConfigStore
 
 
 class SessionService:
-    def __init__(self, store: ConfigStore) -> None:
+    def __init__(self, store: ConfigStore, control_files: ControlFilesStore) -> None:
         self._store = store
+        self._control_files = control_files
+
+    def devpipe_stage(self, tab: TabState) -> DevpipeStage:
+        """The stage of `tab`'s feature, from the control files in
+        `<main worktree>/.devpipe/<feature-name>/` (the main worktree is the first one):
+
+        CREATE without `feature-spec.md`, else PLAN without `plan.md`, else STEPS
+        without `implementation-log.md`, else IMPLEMENTATION.
+        Always CREATE when the tab has no worktree or no feature name.
+        """
+        if not tab.worktrees or not tab.feature_name:
+            return DevpipeStage.CREATE
+        folder = feature_folder(tab.worktrees[0], tab.feature_name)
+        for file_name, stage in (
+            (FEATURE_SPEC_FILE_NAME, DevpipeStage.CREATE),
+            (PLAN_FILE_NAME, DevpipeStage.PLAN),
+            (IMPLEMENTATION_LOG_FILE_NAME, DevpipeStage.STEPS),
+        ):
+            if not self._control_files.file_exists(folder / file_name):
+                return stage
+        return DevpipeStage.IMPLEMENTATION
 
     def start_folder(self) -> Path:
         """Folder the Save/Open dialogs start in.

@@ -36,7 +36,7 @@ def main() -> int:
     window = MainWindow(
         WindowStateService(config),
         TabStateService(TabStateRepository()),
-        SessionService(config),
+        SessionService(config, ControlFiles()),
         WorktreeService(SubprocessGitWorktrees()),
         SkillsService(SkillsFiles(), SKILLS_FOLDER),
         TerminalService(WindowsTerminals()),

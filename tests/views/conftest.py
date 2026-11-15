@@ -150,7 +150,7 @@ def make_window(qtbot, tmp_path, tab_states, worktree_service, terminal_service,
         window = MainWindow(
             WindowStateService(config),
             tab_states,
-            SessionService(config),
+            SessionService(config, ControlFiles()),
             worktree_service,
             SkillsService(SkillsFiles(), tmp_path / "ai-skills"),  # skills flow: test_install_skills.py
             terminal_service,

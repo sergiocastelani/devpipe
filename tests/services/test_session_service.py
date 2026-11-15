@@ -1,13 +1,25 @@
 from pathlib import Path
 
+import pytest
+
+from devpipe.models.control_files import DevpipeStage, feature_folder
+from devpipe.models.tab_state import TabState
 from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.services.session_service import SessionService
 from devpipe.services.window_state_service import WindowStateService
 
 
-def make_service(tmp_path):
+class FakeControlFiles:
+    def __init__(self, existing: set[Path] | None = None) -> None:
+        self.existing = existing or set()
+
+    def file_exists(self, path: Path) -> bool:
+        return path in self.existing
+
+
+def make_service(tmp_path, control_files=None):
     config = ConfigRepository(tmp_path / "config.json")
-    return SessionService(config), config
+    return SessionService(config, control_files or FakeControlFiles()), config
 
 
 def test_start_folder_defaults_to_home(tmp_path):
@@ -92,3 +104,35 @@ def test_remember_folder_keeps_session(tmp_path):
     service.remember_folder(tmp_path / "states" / "x.json")
     assert service.open_files() == [a]
     assert service.active_file() == a
+
+
+@pytest.mark.parametrize(
+    ("files", "stage"),
+    [
+        (set(), DevpipeStage.CREATE),
+        ({"plan.md", "implementation-log.md"}, DevpipeStage.CREATE),
+        ({"feature-spec.md"}, DevpipeStage.PLAN),
+        ({"feature-spec.md", "implementation-log.md"}, DevpipeStage.PLAN),
+        ({"feature-spec.md", "plan.md"}, DevpipeStage.STEPS),
+        ({"feature-spec.md", "plan.md", "implementation-log.md"}, DevpipeStage.IMPLEMENTATION),
+    ],
+)
+def test_devpipe_stage_follows_control_files(tmp_path, files, stage):
+    main = Path("main")
+    folder = feature_folder(main, "feat")
+    service, _ = make_service(tmp_path, FakeControlFiles({folder / name for name in files}))
+    assert service.devpipe_stage(TabState("feat", worktrees=[main, Path("other")])) is stage
+
+
+def test_devpipe_stage_reads_only_the_main_worktree(tmp_path):
+    other = feature_folder(Path("other"), "feat")
+    store = FakeControlFiles({other / "feature-spec.md", other / "plan.md"})
+    service, _ = make_service(tmp_path, store)
+    assert service.devpipe_stage(TabState("feat", worktrees=[Path("main"), Path("other")])) is DevpipeStage.CREATE
+
+
+def test_devpipe_stage_is_create_without_worktree_or_feature_name(tmp_path):
+    folder = feature_folder(Path("main"), "")
+    service, _ = make_service(tmp_path, FakeControlFiles({folder / "feature-spec.md"}))
+    assert service.devpipe_stage(TabState("feat")) is DevpipeStage.CREATE
+    assert service.devpipe_stage(TabState("", worktrees=[Path("main")])) is DevpipeStage.CREATE

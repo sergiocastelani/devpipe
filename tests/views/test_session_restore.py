@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.persistence.config_repository import ConfigRepository
+from devpipe.persistence.control_files import ControlFiles
 from devpipe.services.session_service import SessionService
 from devpipe.views.main_window import STATE_FILE_FILTER
 from devpipe.views.pipeline_tab import NEW_TAB_TITLE
@@ -25,7 +26,7 @@ def session_of(tmp_path) -> tuple[list[Path], Path | None]:
 
 
 def remember_session(tmp_path, files, active) -> None:
-    SessionService(ConfigRepository(tmp_path / "config.json")).remember_session(files, active)
+    SessionService(ConfigRepository(tmp_path / "config.json"), ControlFiles()).remember_session(files, active)
 
 
 @pytest.fixture
