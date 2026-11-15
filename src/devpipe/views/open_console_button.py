@@ -1,9 +1,10 @@
-"""Reusable "Open console" button: opens a new terminal window in a folder.
+"""Reusable "Open console" button: shows a terminal window in a folder.
 
 Self-contained: give it a TerminalService and a folder source, a callable asked
 for the folder only when the button is clicked. It has no label, only a console
-icon. Each click opens a new window and emits console_opened with its
-TerminalId.
+icon. A click brings the console already opened in that folder to the
+foreground, or opens a new one when there is none, and emits console_opened
+with its TerminalId.
 """
 
 from collections.abc import Callable
@@ -52,7 +53,7 @@ def console_icon(size: int = ICON_SIZE) -> QIcon:
 
 
 class OpenConsoleButton(QToolButton):
-    console_opened = Signal(object)  # emitted with the TerminalId after a console was opened
+    console_opened = Signal(object)  # emitted with the TerminalId after a console was opened or brought to front
 
     def __init__(
         self,
@@ -71,8 +72,9 @@ class OpenConsoleButton(QToolButton):
         self.clicked.connect(lambda: self.open_console())  # drop the `checked` argument
 
     def open_console(self) -> TerminalId | None:
-        """Ask the folder source for the folder, open a new console there; emit and
-        return its TerminalId.
+        """Ask the folder source for the folder and show a console there: the one
+        already open in that folder (brought to the foreground) or a new one; emit
+        and return its TerminalId.
 
         Without a folder (source returns None), or on failure, shows a warning and returns None.
         """

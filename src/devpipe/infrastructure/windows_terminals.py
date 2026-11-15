@@ -1,6 +1,7 @@
 """Terminals for Windows: PowerShell in a new console window, typed into via
 WriteConsoleInputW (no Qt). Importable on any OS; only works on Windows."""
 
+import ctypes
 import os
 import shutil
 import subprocess
@@ -13,8 +14,11 @@ from devpipe.models.terminal import TerminalError, TerminalId
 PWSH_SHELL = ("pwsh.exe", "-NoExit", "-NoLogo")  # PowerShell 7, preferred
 WINDOWS_POWERSHELL_SHELL = ("powershell.exe", "-NoExit", "-NoLogo")  # 5.1, built into Windows
 CONSOLE_INPUT_SCRIPT = Path(__file__).with_name("console_input.py")
+CONSOLE_WINDOW_SCRIPT = Path(__file__).with_name("console_window.py")
 SEND_TIMEOUT_SECONDS = 10
-EXIT_CANNOT_ATTACH = 2  # same value as console_input.EXIT_CANNOT_ATTACH
+EXIT_CANNOT_ATTACH = 2  # same value as EXIT_CANNOT_ATTACH in the helper scripts
+GA_ROOTOWNER = 3
+SW_RESTORE = 9
 # Not inherited by the shell: this variable lists the module folders of the
 # PowerShell devpipe was started from, which may be another PowerShell version
 # than the shell (e.g. 5.1 loading PowerShell 7's PSReadLine prompts "run software
@@ -25,6 +29,7 @@ UNKNOWN_TERMINAL_MESSAGE = "unknown terminal"
 TERMINAL_CLOSED_MESSAGE = "terminal is closed"
 CANNOT_OPEN_MESSAGE = "cannot open terminal: {reason}"
 CANNOT_SEND_MESSAGE = "cannot send text: {reason}"
+CANNOT_FIND_WINDOW_MESSAGE = "cannot find terminal window: {reason}"
 
 
 class WindowsTerminals:
@@ -33,7 +38,8 @@ class WindowsTerminals:
     Each window is a new console (CREATE_NEW_CONSOLE), so it is hosted by conhost
     or, when it is the default terminal, by Windows Terminal. Text is injected by
     a short-lived helper process (console_input.py) so this process never leaves
-    its own console. Thread-safe.
+    its own console; the console window is found, and its Windows Terminal tab
+    selected, the same way (console_window.py). Thread-safe.
     """
 
     def __init__(self, shell: tuple[str, ...] | None = None) -> None:
@@ -62,27 +68,24 @@ class WindowsTerminals:
         """See Terminals.send_text."""
         if not self.is_open(terminal):
             raise TerminalError(TERMINAL_CLOSED_MESSAGE)
-        try:
-            completed = subprocess.run(
-                [sys.executable, "-I", str(CONSOLE_INPUT_SCRIPT), terminal.value, "1" if enter else "0"],
-                input=text.encode("utf-8"),
-                capture_output=True,
-                timeout=SEND_TIMEOUT_SECONDS,
-                creationflags=subprocess.DETACHED_PROCESS,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise TerminalError(CANNOT_SEND_MESSAGE.format(reason=exc)) from exc
-        if completed.returncode == EXIT_CANNOT_ATTACH:
-            raise TerminalError(TERMINAL_CLOSED_MESSAGE)
-        if completed.returncode != 0:
-            reason = completed.stderr.decode("utf-8", "replace").strip() or (
-                f"helper exited with code {completed.returncode}"
-            )
-            raise TerminalError(CANNOT_SEND_MESSAGE.format(reason=reason))
+        _run_helper(
+            CONSOLE_INPUT_SCRIPT,
+            [terminal.value, "1" if enter else "0"],
+            text.encode("utf-8"),
+            CANNOT_SEND_MESSAGE,
+        )
 
     def is_open(self, terminal: TerminalId) -> bool:
         """See Terminals.is_open. Raises TerminalError for an id it did not issue."""
         return self._process(terminal).poll() is None
+
+    def bring_to_front(self, terminal: TerminalId) -> None:
+        """See Terminals.bring_to_front. Under Windows Terminal it also selects the
+        terminal's tab (best effort, see console_window.py)."""
+        if not self.is_open(terminal):
+            raise TerminalError(TERMINAL_CLOSED_MESSAGE)
+        output = _run_helper(CONSOLE_WINDOW_SCRIPT, [terminal.value], b"", CANNOT_FIND_WINDOW_MESSAGE)
+        _activate_window(int(output.decode("ascii").strip()))
 
     def close(self, terminal: TerminalId) -> None:
         """See Terminals.close."""
@@ -99,6 +102,54 @@ class WindowsTerminals:
         if process is None:
             raise TerminalError(UNKNOWN_TERMINAL_MESSAGE)
         return process
+
+
+def _run_helper(script: Path, args: list[str], stdin: bytes, failure_message: str) -> bytes:
+    """Run a helper script detached (no console of its own) and return its stdout.
+
+    Raises TerminalError: TERMINAL_CLOSED_MESSAGE when it cannot attach to the
+    terminal's console, `failure_message` (with a {reason}) on any other failure.
+    """
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-I", str(script), *args],
+            input=stdin,
+            capture_output=True,
+            timeout=SEND_TIMEOUT_SECONDS,
+            creationflags=subprocess.DETACHED_PROCESS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise TerminalError(failure_message.format(reason=exc)) from exc
+    if completed.returncode == EXIT_CANNOT_ATTACH:
+        raise TerminalError(TERMINAL_CLOSED_MESSAGE)
+    if completed.returncode != 0:
+        reason = completed.stderr.decode("utf-8", "replace").strip() or (
+            f"helper exited with code {completed.returncode}"
+        )
+        raise TerminalError(failure_message.format(reason=reason))
+    return completed.stdout
+
+
+def _activate_window(console_window: int) -> None:
+    """Restore and bring to the foreground the top-level window of a console window.
+
+    Runs in this process, not in a helper: Windows lets only the foreground
+    process (devpipe, while the user is clicking in it) set the foreground window.
+    """
+    from ctypes import wintypes  # Windows only
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetAncestor.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.IsIconic.argtypes = [wintypes.HWND]
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+
+    # conhost: the console window itself; Windows Terminal: the window owning its pseudo window.
+    window = user32.GetAncestor(console_window, GA_ROOTOWNER) or console_window
+    if user32.IsIconic(window):
+        user32.ShowWindow(window, SW_RESTORE)
+    user32.SetForegroundWindow(window)
 
 
 def default_shell() -> tuple[str, ...]:

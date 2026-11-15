@@ -55,14 +55,33 @@ def test_folder_source_is_read_only_on_click(qtbot, terminal_service, fake_termi
     assert fake_terminals.opened == [tmp_path / "a", tmp_path / "b"]
 
 
-def test_click_opens_a_new_console_in_the_folder_each_time(qtbot, terminal_service, fake_terminals, tmp_path):
+def test_second_click_brings_the_open_console_to_front(qtbot, terminal_service, fake_terminals, tmp_path):
     button = make_button(qtbot, terminal_service, tmp_path)
     with qtbot.waitSignal(button.console_opened, timeout=1000) as first:
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     with qtbot.waitSignal(button.console_opened, timeout=1000) as second:
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert fake_terminals.opened == [tmp_path]
+    assert fake_terminals.fronted == [TerminalId("1")]
+    assert (first.args, second.args) == ([TerminalId("1")], [TerminalId("1")])
+
+
+def test_click_opens_a_new_console_after_the_user_closed_it(qtbot, terminal_service, fake_terminals, tmp_path):
+    button = make_button(qtbot, terminal_service, tmp_path)
+    button.open_console()
+    fake_terminals.closed.add(TerminalId("1"))
+    assert button.open_console() == TerminalId("2")
     assert fake_terminals.opened == [tmp_path, tmp_path]
-    assert (first.args, second.args) == ([TerminalId("1")], [TerminalId("2")])
+    assert fake_terminals.fronted == []
+
+
+def test_bring_to_front_failure_warns(qtbot, terminal_service, fake_terminals, tmp_path, warnings):
+    button = make_button(qtbot, terminal_service, tmp_path)
+    button.open_console()
+    fake_terminals.front_error = TerminalError("cannot find terminal window: boom")
+    with qtbot.assertNotEmitted(button.console_opened):
+        assert button.open_console() is None
+    assert "boom" in warnings[0][1]
 
 
 def test_missing_folder_warns_and_emits_nothing(qtbot, terminal_service, fake_terminals, tmp_path, warnings):
@@ -116,8 +135,9 @@ def test_last_console_id_is_kept_in_the_tab_session_not_the_file(
 
     button = tab.devpipe_create_panel.open_console_button
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    tab.session.last_console = None
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)  # brings the same console to front
 
-    assert tab.session.last_console == TerminalId("2")
+    assert tab.session.last_console == TerminalId("1")
     tab.show_panel(Panel.DEVPIPE_CREATE)  # a later write still holds no terminal id
     assert path.read_text("utf-8") == file_before

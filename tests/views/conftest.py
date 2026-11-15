@@ -69,12 +69,16 @@ class FakeGitWorktrees:
 
 
 class FakeTerminals:
-    """Terminals for view tests: records the folders opened and issues TerminalId("1"),
-    ("2"), ... `open_error`, when set, is raised by open."""
+    """Terminals for view tests: records the folders opened and the terminals brought
+    to front, and issues TerminalId("1"), ("2"), ... `open_error`, when set, is raised
+    by open; `front_error` by bring_to_front. `closed` simulates the user closing a window."""
 
     def __init__(self) -> None:
         self.opened: list[Path] = []
+        self.fronted: list[TerminalId] = []
+        self.closed: set[TerminalId] = set()
         self.open_error: TerminalError | None = None
+        self.front_error: TerminalError | None = None
 
     def open(self, cwd):
         if self.open_error is not None:
@@ -86,10 +90,15 @@ class FakeTerminals:
         pass
 
     def is_open(self, terminal):
-        return True
+        return terminal not in self.closed
 
     def close(self, terminal):
-        pass
+        self.closed.add(terminal)
+
+    def bring_to_front(self, terminal):
+        if self.front_error is not None:
+            raise self.front_error
+        self.fronted.append(terminal)
 
 
 @pytest.fixture

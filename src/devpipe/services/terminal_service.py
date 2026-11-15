@@ -33,13 +33,21 @@ class Terminals(Protocol):
         """End the terminal's shell, closing its window. No-op when already closed."""
         ...
 
+    def bring_to_front(self, terminal: TerminalId) -> None:
+        """Restore the terminal's window when minimized and make it the foreground
+        window of the system. Raises TerminalError (only) when the terminal is
+        closed or its window cannot be found."""
+        ...
+
 
 class TerminalService:
-    """Keeps at most one terminal per key (e.g. one per pipeline tab)."""
+    """Keeps at most one terminal per key (e.g. one per pipeline tab), and at most
+    one console per folder."""
 
     def __init__(self, terminals: Terminals) -> None:
         self._terminals = terminals
         self._by_key: dict[str, TerminalId] = {}
+        self._consoles: dict[Path, TerminalId] = {}  # by resolved folder
 
     def open(self, key: str, cwd: Path) -> bool:
         """Open a terminal for `key` in `cwd`, unless `key` already has an open one.
@@ -53,13 +61,21 @@ class TerminalService:
         return True
 
     def open_console(self, cwd: Path) -> TerminalId:
-        """Open a new terminal in `cwd` that no key owns (every call opens another
-        window; the service does not track it) and return its id.
-        Raises TerminalError when `cwd` is not an existing folder or the terminal
-        cannot be opened."""
+        """Show a console in `cwd` and return its id. When a console opened by an
+        earlier call for the same folder is still open, its window is brought to
+        the foreground; otherwise a new terminal that no key owns is opened in `cwd`.
+        Raises TerminalError when `cwd` is not an existing folder, or the terminal
+        cannot be opened or brought to the foreground."""
         if not cwd.is_dir():
             raise TerminalError(FOLDER_MISSING_MESSAGE)
-        return self._terminals.open(cwd)
+        folder = cwd.resolve()
+        terminal = self._consoles.get(folder)
+        if terminal is not None and self._terminals.is_open(terminal):
+            self._terminals.bring_to_front(terminal)
+            return terminal
+        terminal = self._terminals.open(cwd)
+        self._consoles[folder] = terminal
+        return terminal
 
     def send(self, key: str, text: str, enter: bool = True) -> None:
         """Type `text` (then Enter when `enter`) into the terminal of `key`.

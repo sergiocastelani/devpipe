@@ -9,11 +9,13 @@ from devpipe.services.terminal_service import (
 
 
 class FakeTerminals:
-    """Issues TerminalId("1"), ("2"), ...; records sends; `closed` simulates the user closing a window."""
+    """Issues TerminalId("1"), ("2"), ...; records sends and terminals brought to front;
+    `closed` simulates the user closing a window."""
 
     def __init__(self):
         self.opened: list = []
         self.sent: list[tuple[TerminalId, str, bool]] = []
+        self.fronted: list[TerminalId] = []
         self.closed: set[TerminalId] = set()
 
     def open(self, cwd):
@@ -28,6 +30,9 @@ class FakeTerminals:
 
     def close(self, terminal):
         self.closed.add(terminal)
+
+    def bring_to_front(self, terminal):
+        self.fronted.append(terminal)
 
 
 def test_open_opens_one_terminal_per_key(tmp_path):
@@ -92,15 +97,63 @@ def test_close_closes_and_forgets(tmp_path):
     assert service.is_open("tab-a") is False
 
 
-def test_open_console_opens_a_new_untracked_terminal_each_call(tmp_path):
+def test_open_console_reuses_the_open_console_of_the_folder(tmp_path):
     fake = FakeTerminals()
     service = TerminalService(fake)
 
     assert service.open_console(tmp_path) == TerminalId("1")
+    assert service.open_console(tmp_path) == TerminalId("1")
+
+    assert fake.opened == [tmp_path]
+    assert fake.fronted == [TerminalId("1")]
+    assert service.open("tab-a", tmp_path) is True  # keyed terminals are unaffected
+
+
+def test_open_console_matches_the_folder_not_its_spelling(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    (tmp_path / "a").mkdir()
+
+    service.open_console(tmp_path)
+    assert service.open_console(tmp_path / "a" / "..") == TerminalId("1")
+    assert fake.fronted == [TerminalId("1")]
+
+
+def test_open_console_opens_one_console_per_folder(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+
+    assert service.open_console(a) == TerminalId("1")
+    assert service.open_console(b) == TerminalId("2")
+    assert service.open_console(a) == TerminalId("1")
+
+    assert fake.opened == [a, b]
+    assert fake.fronted == [TerminalId("1")]
+
+
+def test_open_console_reopens_a_console_closed_by_the_user(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    service.open_console(tmp_path)
+    fake.closed.add(TerminalId("1"))
+
+    assert service.open_console(tmp_path) == TerminalId("2")
     assert service.open_console(tmp_path) == TerminalId("2")
 
     assert fake.opened == [tmp_path, tmp_path]
-    assert service.open("tab-a", tmp_path) is True  # keyed terminals are unaffected
+    assert fake.fronted == [TerminalId("2")]
+
+
+def test_open_console_ignores_keyed_terminals(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    service.open("tab-a", tmp_path)
+
+    assert service.open_console(tmp_path) == TerminalId("2")
+    assert fake.fronted == []
 
 
 def test_open_console_rejects_missing_folder(tmp_path):
