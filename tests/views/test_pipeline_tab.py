@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMessageBox, QStackedWidget
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QStackedWidget
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.persistence.skills_files import SkillsFiles
@@ -43,10 +43,11 @@ def read_json(path):
 def test_tab_shows_start_panel_in_a_stack(qtbot, tab_states, worktree_service):
     tab = make_tab(qtbot, tab_states, worktree_service)
     assert isinstance(tab.stack, QStackedWidget)
-    assert tab.stack.count() == 2
+    assert tab.stack.count() == 3
     assert tab.stack.widget(0) is tab.start_panel
     assert tab.stack.widget(1) is tab.new_worktree_panel
     assert isinstance(tab.new_worktree_panel, NewWorktreePanel)
+    assert tab.stack.widget(2) is tab.devpipe_create_panel
     assert tab.stack.currentWidget() is tab.start_panel
     assert tab.active_panel is Panel.START
     assert isinstance(tab.start_panel, StartPanel)
@@ -375,3 +376,88 @@ def test_remove_worktree_write_failure_warns_and_keeps_removal(qtbot, tab_states
     path.parent.mkdir()
     tab.show_panel(Panel.START)
     assert read_json(path)["worktrees"] == [str(b)]
+
+
+def answer_folder(monkeypatch, answer: str) -> list:
+    """Fake QFileDialog.getExistingDirectory: records calls, returns `answer` ("" cancels)."""
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return answer
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", fake)
+    return calls
+
+
+def test_start_pipeline_opens_devpipe_create_panel(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    tab.apply_saved(path, TabState("x", Panel.START, [a]))
+    qtbot.mouseClick(tab.start_panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert tab.stack.currentWidget() is tab.devpipe_create_panel
+    assert tab.active_panel is Panel.DEVPIPE_CREATE
+    assert read_json(path) == {**EXPECTED_FILE, "active_panel": "devpipe-create", "worktrees": [str(a)]}
+
+
+def test_start_pipeline_without_worktrees_saves_chosen_folder(
+    qtbot, tab_states, worktree_service, tmp_path, monkeypatch
+):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    folder = tmp_path / "project"
+    tab.apply_saved(path, TabState("x"))
+    answer_folder(monkeypatch, str(folder))
+    qtbot.mouseClick(tab.start_panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert tab.active_panel is Panel.DEVPIPE_CREATE
+    assert worktree_texts(tab) == [str(folder)]
+    assert read_json(path) == {**EXPECTED_FILE, "active_panel": "devpipe-create", "worktrees": [str(folder)]}
+
+
+def test_start_pipeline_folder_cancel_stays_on_start(
+    qtbot, tab_states, worktree_service, tmp_path, monkeypatch
+):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    tab.apply_saved(path, TabState("x"))
+    answer_folder(monkeypatch, "")
+    qtbot.mouseClick(tab.start_panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert tab.stack.currentWidget() is tab.start_panel
+    assert tab.active_panel is Panel.START
+    assert worktree_texts(tab) == []
+    assert not path.exists()  # apply_saved does not write; nothing else did
+
+
+def test_apply_saved_shows_devpipe_create_panel(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    tab.apply_saved(tmp_path / "x.json", TabState("x", Panel.DEVPIPE_CREATE))
+    assert tab.stack.currentWidget() is tab.devpipe_create_panel
+    assert tab.active_panel is Panel.DEVPIPE_CREATE
+
+
+def test_active_panel_change_keeps_worktrees(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    b = tmp_path / "wt" / "b"
+    tab.apply_saved(path, TabState("x", Panel.START, [b, a]))
+    expected = {**EXPECTED_FILE, "worktrees": [str(b), str(a)]}
+    qtbot.mouseClick(tab.start_panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert read_json(path) == {**expected, "active_panel": "devpipe-create"}
+    tab.show_panel(Panel.START)
+    assert read_json(path) == expected
+
+
+def test_saved_devpipe_create_panel_reloads_with_worktrees(qtbot, tab_states, worktree_service, tmp_path):
+    tab = make_tab(qtbot, tab_states, worktree_service)
+    path = tmp_path / "x.json"
+    a = tmp_path / "wt" / "a"
+    tab.apply_saved(path, TabState("x", Panel.START, [a]))
+    tab.show_panel(Panel.DEVPIPE_CREATE)
+    reloaded = make_tab(qtbot, tab_states, worktree_service)
+    reloaded.apply_saved(path, tab_states.load(path))
+    assert reloaded.active_panel is Panel.DEVPIPE_CREATE
+    assert reloaded.stack.currentWidget() is reloaded.devpipe_create_panel
+    assert reloaded.start_panel.worktrees_list.count() == 1
+    assert reloaded.start_panel.worktrees_list.item(0).text() == str(a)

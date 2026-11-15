@@ -17,11 +17,13 @@ def test_panel_values():
     assert Panel("start") is Panel.START
     assert Panel.NEW_WORKTREE.value == "new-worktree"
     assert Panel("new-worktree") is Panel.NEW_WORKTREE
-    assert len(Panel) == 2
+    assert Panel.DEVPIPE_CREATE.value == "devpipe-create"
+    assert Panel("devpipe-create") is Panel.DEVPIPE_CREATE
+    assert len(Panel) == 3
 
 
-def test_persisted_panels_is_start_only():
-    assert PERSISTED_PANELS == frozenset({Panel.START})
+def test_persisted_panels_are_start_and_devpipe_create():
+    assert PERSISTED_PANELS == frozenset({Panel.START, Panel.DEVPIPE_CREATE})
 
 
 def test_tab_state_defaults_to_start_panel():

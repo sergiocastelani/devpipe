@@ -19,9 +19,10 @@ class Panel(enum.Enum):
 
     START = "start"
     NEW_WORKTREE = "new-worktree"
+    DEVPIPE_CREATE = "devpipe-create"
 
 
-PERSISTED_PANELS: frozenset[Panel] = frozenset({Panel.START})
+PERSISTED_PANELS: frozenset[Panel] = frozenset({Panel.START, Panel.DEVPIPE_CREATE})
 """The panels a tab state file may hold as `active_panel`."""
 
 

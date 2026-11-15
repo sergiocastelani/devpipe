@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QVBoxLayout
 
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
@@ -312,3 +312,74 @@ def test_double_click_file_is_not_a_folder(qtbot, tmp_path, opened_urls, warning
     double_click(panel, 0)
     assert warnings == [("Folder not found", f"Folder not found: {f}")]
     assert opened_urls == []
+
+
+def test_start_pipeline_button_is_big_and_disabled_before_save(qtbot):
+    panel = make_panel(qtbot)
+    button = panel.start_pipeline_button
+    assert button.text() == "Start Pipeline"
+    assert not button.isEnabled()
+    assert button.minimumSize() == QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
+    assert button.font().pointSize() == BIG_BUTTON_POINT_SIZE
+
+
+def test_start_pipeline_button_is_last_big_button(qtbot):
+    panel = make_panel(qtbot)
+    buttons = panel.new_worktree_button.parentWidget().layout().itemAt(2).layout()
+    assert buttons.indexOf(panel.new_worktree_button) == buttons.count() - 2
+    assert buttons.indexOf(panel.start_pipeline_button) == buttons.count() - 1
+
+
+def answer_folder(monkeypatch, answer: str) -> list:
+    """Fake QFileDialog.getExistingDirectory: records calls, returns `answer` ("" cancels)."""
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return answer
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", fake)
+    return calls
+
+
+def test_start_pipeline_click_emits_signal_after_save(qtbot, monkeypatch, tmp_path):
+    panel = make_panel(qtbot)
+    panel.show_saved("x")
+    panel.show_worktrees([tmp_path / "a"])
+    calls = answer_folder(monkeypatch, "")
+    assert panel.start_pipeline_button.isEnabled()
+    with qtbot.assertNotEmitted(panel.worktree_folder_chosen):
+        with qtbot.waitSignal(panel.start_pipeline_requested, timeout=1000) as blocker:
+            qtbot.mouseClick(panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert blocker.args == []
+    assert calls == []  # worktrees listed: no folder dialog
+
+
+def test_start_pipeline_with_no_worktrees_asks_for_folder(qtbot, monkeypatch, tmp_path):
+    panel = make_panel(qtbot)
+    panel.show_saved("x")
+    calls = answer_folder(monkeypatch, str(tmp_path))
+    chosen = []
+    started = []
+    panel.worktree_folder_chosen.connect(lambda path: chosen.append(path))
+    panel.start_pipeline_requested.connect(lambda: started.append(list(chosen)))
+    qtbot.mouseClick(panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert len(calls) == 1
+    assert chosen == [tmp_path]
+    assert started == [[tmp_path]]  # the folder is reported before the start request
+
+
+def test_start_pipeline_folder_cancel_emits_nothing(qtbot, monkeypatch):
+    panel = make_panel(qtbot)
+    panel.show_saved("x")
+    calls = answer_folder(monkeypatch, "")
+    with qtbot.assertNotEmitted(panel.worktree_folder_chosen):
+        with qtbot.assertNotEmitted(panel.start_pipeline_requested):
+            qtbot.mouseClick(panel.start_pipeline_button, Qt.MouseButton.LeftButton)
+    assert len(calls) == 1
+
+
+def test_disabled_start_pipeline_button_emits_nothing(qtbot):
+    panel = make_panel(qtbot)
+    with qtbot.assertNotEmitted(panel.start_pipeline_requested):
+        qtbot.mouseClick(panel.start_pipeline_button, Qt.MouseButton.LeftButton)

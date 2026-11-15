@@ -1,10 +1,4 @@
-"""First panel of a pipeline tab: feature name, Save, and the start buttons, and,
-at the bottom, the tab's worktree folders (double-click opens one in the file explorer;
-the "x" button asks the tab to remove the selected one from the list).
-
-"Create new worktree" asks the tab to open the New worktree panel. "Install/Update skills"
-(always enabled) asks for a destination folder and copies the agent skills into it.
-"""
+"""First panel of a pipeline tab"""
 
 from pathlib import Path
 
@@ -30,6 +24,7 @@ from devpipe.services.skills_service import SkillsService
 NAME_PLACEHOLDER = "Feature name"
 SAVE_TEXT = "Save"
 NEW_WORKTREE_TEXT = "Create new worktree"
+START_PIPELINE_TEXT = "Start Pipeline"
 INSTALL_SKILLS_TEXT = "Install/Update skills"
 BIG_BUTTON_MIN_WIDTH = 320
 BIG_BUTTON_MIN_HEIGHT = 90
@@ -47,11 +42,14 @@ SKILLS_DIALOG_TITLE = "Install/Update skills: choose the agent's skills folder"
 SKILLS_ERROR_TITLE = "Cannot install skills"
 SKILLS_DONE_TITLE = "Skills installed"
 SKILLS_DONE_TEXT = "Skills installed in:\n{path}"
+WORKTREE_FOLDER_DIALOG_TITLE = "Start Pipeline: select the project folder"
 
 
 class StartPanel(QWidget):
     save_requested = Signal(str)  # emitted with the current slug when Save is clicked
     new_worktree_requested = Signal()  # emitted when "Create new worktree" is clicked
+    start_pipeline_requested = Signal()  # emitted when "Start Pipeline" is clicked (after a folder was chosen, if asked)
+    worktree_folder_chosen = Signal(object)  # emitted with the Path picked on "Start Pipeline" when the list was empty
     remove_worktree_requested = Signal(object)  # emitted with the selected Path when "x" is clicked
 
     def __init__(self, skills: SkillsService) -> None:
@@ -70,6 +68,8 @@ class StartPanel(QWidget):
         self.new_worktree_button = self._big_button(NEW_WORKTREE_TEXT)
         self.install_skills_button = self._big_button(INSTALL_SKILLS_TEXT)
         self.new_worktree_button.setEnabled(False)
+        self.start_pipeline_button = self._big_button(START_PIPELINE_TEXT)
+        self.start_pipeline_button.setEnabled(False)
         self.worktrees_label = QLabel(WORKTREES_LABEL_TEXT)
         self.worktrees_list = QListWidget()
         self.worktrees_list.setAccessibleName(WORKTREES_LABEL_TEXT)
@@ -87,8 +87,9 @@ class StartPanel(QWidget):
         buttons = QVBoxLayout()
         buttons.setAlignment(Qt.AlignmentFlag.AlignCenter)
         buttons.setSpacing(BIG_BUTTON_SPACING)
-        buttons.addWidget(self.install_skills_button)
         buttons.addWidget(self.new_worktree_button)
+        buttons.addWidget(self.start_pipeline_button)
+        buttons.addWidget(self.install_skills_button)
 
         worktrees_header = QHBoxLayout()
         worktrees_header.addWidget(self.worktrees_label, 1)
@@ -104,6 +105,7 @@ class StartPanel(QWidget):
         self.name_input.textChanged.connect(self._on_name_changed)
         self.save_button.clicked.connect(self._on_save_clicked)
         self.new_worktree_button.clicked.connect(lambda: self.new_worktree_requested.emit())
+        self.start_pipeline_button.clicked.connect(self._on_start_pipeline_clicked)
         self.install_skills_button.clicked.connect(self._on_install_skills_clicked)
         self.worktrees_list.itemDoubleClicked.connect(self._on_worktree_double_clicked)
         self.worktrees_list.currentItemChanged.connect(self._refresh_remove_enabled)
@@ -112,12 +114,13 @@ class StartPanel(QWidget):
         self.show_worktrees([])
 
     def show_saved(self, feature_name: str) -> None:
-        """Switch to saved mode (one-way): name fixed, "Create new worktree" enabled."""
+        """Switch to saved mode (one-way): name fixed, "Create new worktree" and "Start Pipeline" enabled."""
         self._saved = True
         self.name_input.setText(feature_name)
         self.name_input.setEnabled(False)
         self.save_button.setEnabled(False)
         self.new_worktree_button.setEnabled(True)
+        self.start_pipeline_button.setEnabled(True)
 
     def show_worktrees(self, paths: list[Path]) -> None:
         """Replace the worktree list with `paths` (shown as str(path)), in order.
@@ -135,6 +138,18 @@ class StartPanel(QWidget):
         self.remove_worktree_button.setVisible(visible)
         self.worktrees_list.setVisible(visible)
         self._refresh_remove_enabled()
+
+    def _on_start_pipeline_clicked(self) -> None:
+        """With no worktree listed, ask for the folder to work with first: cancel does
+        nothing; a choice emits worktree_folder_chosen. Then emit start_pipeline_requested."""
+        if self.worktrees_list.count() == 0:
+            selected = QFileDialog.getExistingDirectory(
+                self, WORKTREE_FOLDER_DIALOG_TITLE, str(Path.home())
+            )
+            if selected == "":
+                return
+            self.worktree_folder_chosen.emit(Path(selected))
+        self.start_pipeline_requested.emit()
 
     def _on_install_skills_clicked(self) -> None:
         """Ask for a destination folder, then copy the skills into it, replacing

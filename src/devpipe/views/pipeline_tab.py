@@ -14,6 +14,7 @@ from devpipe.models.worktree import WorktreeRequest, WorktreeResult
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.worktree_service import WorktreeService
+from devpipe.views.devpipe_create_panel import DevpipeCreatePanel
 from devpipe.views.new_worktree_panel import NewWorktreePanel
 from devpipe.views.start_panel import StartPanel
 from devpipe.views.worktree_worker import WorktreeWorker
@@ -46,11 +47,14 @@ class PipelineTab(QWidget):
         self.stack.addWidget(self.start_panel)
         self.new_worktree_panel = NewWorktreePanel()
         self.stack.addWidget(self.new_worktree_panel)
+        self.devpipe_create_panel = DevpipeCreatePanel()
+        self.stack.addWidget(self.devpipe_create_panel)
         self.stack.setCurrentWidget(self.start_panel)
         # The single map from panel id to panel widget.
         self._panels: dict[Panel, QWidget] = {
             Panel.START: self.start_panel,
             Panel.NEW_WORKTREE: self.new_worktree_panel,
+            Panel.DEVPIPE_CREATE: self.devpipe_create_panel,
         }
 
         layout = QVBoxLayout(self)
@@ -59,6 +63,8 @@ class PipelineTab(QWidget):
 
         self.start_panel.new_worktree_requested.connect(self.open_new_worktree_panel)
         self.start_panel.remove_worktree_requested.connect(self.remove_worktree)
+        self.start_panel.worktree_folder_chosen.connect(self._set_single_worktree)
+        self.start_panel.start_pipeline_requested.connect(lambda: self.show_panel(Panel.DEVPIPE_CREATE))
         self.new_worktree_panel.create_requested.connect(self._start_run)
 
     @property
@@ -114,6 +120,12 @@ class PipelineTab(QWidget):
         self.start_panel.show_worktrees(self._worktrees)
         if self._state_path is not None:
             self._write(self._state_path, self._current_state())
+
+    def _set_single_worktree(self, path: Path) -> None:
+        """Make `path` the only entry of the worktree list, without writing; the
+        show_panel that follows on "Start Pipeline" persists it."""
+        self._worktrees = [path]
+        self.start_panel.show_worktrees(self._worktrees)
 
     def apply_saved(self, path: Path, state: TabState) -> None:
         """Put the tab in saved mode for `path` and `state` without writing."""

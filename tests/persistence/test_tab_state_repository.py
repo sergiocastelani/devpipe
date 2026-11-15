@@ -121,6 +121,15 @@ def test_save_then_load_round_trips(tmp_path):
     assert repo.load(path) == state
 
 
+
+def test_devpipe_create_panel_round_trips(tmp_path):
+    path = tmp_path / "s.json"
+    repo = TabStateRepository()
+    state = TabState("new-feature", Panel.DEVPIPE_CREATE)
+    repo.save(path, state)
+    assert json.loads(path.read_text(encoding="utf-8"))["active_panel"] == "devpipe-create"
+    assert repo.load(path) == state
+
 def test_v2_file_load_then_save_is_identical(tmp_path):
     path = tmp_path / "s.json"
     content = json.dumps({**_VALID, "worktrees": [str(tmp_path / "wt" / "x")]}, indent=2) + "\n"
