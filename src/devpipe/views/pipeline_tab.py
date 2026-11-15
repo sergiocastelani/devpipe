@@ -1,4 +1,5 @@
-"""One pipeline tab: a stack of panels, exactly one shown at a time.
+"""One pipeline tab: the console button on top, then a stack of panels, exactly
+one shown at a time, filling the rest of the tab.
 
 New panels are added to `stack` and `_panels`; the start panel is always the first one.
 Only panels in PERSISTED_PANELS are written as `active_panel`.
@@ -7,7 +8,7 @@ Only panels in PERSISTED_PANELS are written as `active_panel`.
 from pathlib import Path
 
 from PySide6.QtCore import Signal, Slot
-from PySide6.QtWidgets import QMessageBox, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
 from devpipe.models.tab_session import TabSession
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
@@ -21,6 +22,7 @@ from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.devpipe_create_panel import DevpipeCreatePanel
 from devpipe.views.devpipe_plan_panel import DevpipePlanPanel
 from devpipe.views.new_worktree_panel import NewWorktreePanel
+from devpipe.views.open_console_button import OpenConsoleButton
 from devpipe.views.start_panel import StartPanel
 from devpipe.views.worktree_worker import WorktreeWorker
 
@@ -56,6 +58,9 @@ class PipelineTab(QWidget):
         # Runtime info for this app session only; never written to the state file.
         self.session = TabSession()
 
+        # Always available, whatever the panel: the console starts in the first worktree.
+        self.open_console_button = OpenConsoleButton(terminals, self._first_worktree)
+
         self.stack = QStackedWidget()
         self.start_panel = StartPanel(skills)
         self.stack.addWidget(self.start_panel)
@@ -82,16 +87,26 @@ class PipelineTab(QWidget):
             Panel.DEVPIPE_PLAN: self.devpipe_plan_panel,
         }
 
+        top_bar = QHBoxLayout()
+        top_bar.addWidget(self.open_console_button)
+        top_bar.addStretch()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.stack)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addLayout(top_bar)
+        layout.addWidget(separator)
+        layout.addWidget(self.stack, stretch=1)
 
         self.start_panel.new_worktree_requested.connect(self.open_new_worktree_panel)
         self.start_panel.remove_worktree_requested.connect(self.remove_worktree)
         self.start_panel.worktree_folder_chosen.connect(self._set_single_worktree)
         self.start_panel.start_pipeline_requested.connect(lambda: self.show_panel(Panel.DEVPIPE_CREATE))
         self.new_worktree_panel.create_requested.connect(self._start_run)
-        self.devpipe_create_panel.console_opened.connect(self._remember_console)
+        self.open_console_button.console_opened.connect(self._remember_console)
+        # Connected after the button's own handler, so the tab already knows the new console.
+        self.open_console_button.clicked.connect(self.devpipe_create_panel.update_send_button)
         self.devpipe_create_panel.prompt_changed.connect(self._set_create_prompt)
 
     @property
@@ -219,6 +234,9 @@ class PipelineTab(QWidget):
     def _show_worktrees(self) -> None:
         """Show the worktree list on the start panel (the create panel reads it on demand)."""
         self.start_panel.show_worktrees(self._worktrees)
+
+    def _first_worktree(self) -> Path | None:
+        return self._worktrees[0] if self._worktrees else None
 
     def _remember_console(self, terminal: TerminalId) -> None:
         self.session.last_console = terminal

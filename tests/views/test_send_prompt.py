@@ -42,13 +42,13 @@ def click(qtbot, button):
 def test_disabled_until_the_console_button_opens_a_terminal(qtbot, tab):
     panel = tab.devpipe_create_panel
     assert not panel.send_prompt_button.isEnabled()
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     assert panel.send_prompt_button.isEnabled()
 
 
 def test_state_is_refreshed_when_the_panel_is_shown(qtbot, tab, fake_terminals):
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     tab.show_panel(Panel.START)
     fake_terminals.closed.add(TerminalId("1"))
     tab.show_panel(Panel.DEVPIPE_CREATE)
@@ -58,13 +58,13 @@ def test_state_is_refreshed_when_the_panel_is_shown(qtbot, tab, fake_terminals):
 def test_console_button_failure_keeps_it_disabled(qtbot, tab, fake_terminals, warnings):
     fake_terminals.open_error = TerminalError("boom")
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     assert not panel.send_prompt_button.isEnabled()
 
 
 def test_click_brings_the_terminal_to_front_and_types_the_command(qtbot, tab, fake_terminals, warnings):
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     panel.prompt_input.setPlainText("line 1\nline 2")  # the current text, even before it is saved
     fake_terminals.fronted.clear()
     click(qtbot, panel.send_prompt_button)
@@ -75,7 +75,7 @@ def test_click_brings_the_terminal_to_front_and_types_the_command(qtbot, tab, fa
 
 def test_terminal_closed_before_the_click_disables_without_sending(qtbot, tab, fake_terminals, warnings):
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     fake_terminals.closed.add(TerminalId("1"))
     panel.send_prompt()
     assert fake_terminals.sent == []
@@ -84,7 +84,7 @@ def test_terminal_closed_before_the_click_disables_without_sending(qtbot, tab, f
 
 def test_send_failure_warns(qtbot, tab, fake_terminals, warnings):
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     fake_terminals.send_error = TerminalError("write failed: boom")
     click(qtbot, panel.send_prompt_button)
     assert "boom" in warnings[0][1]

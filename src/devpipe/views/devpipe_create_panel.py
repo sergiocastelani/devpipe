@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.terminal_service import TerminalService
-from devpipe.views.open_console_button import OpenConsoleButton
 
 PROMPT_SAVE_DELAY_MS = 5000
 """Quiet time after the last edit of the prompt before it is reported for saving."""
@@ -38,7 +37,6 @@ def create_command(feature_name: str, prompt: str) -> str:
 
 
 class DevpipeCreatePanel(QWidget):
-    console_opened = Signal(object)  # forwarded from open_console_button: the TerminalId
     # The prompt text, PROMPT_SAVE_DELAY_MS after the user stopped typing
     # (or at once when the panel is hidden with an edit still pending).
     prompt_changed = Signal(str)
@@ -53,15 +51,15 @@ class DevpipeCreatePanel(QWidget):
         control_files: ControlFilesService,
         open_plan_panel: Callable[[], None],
     ) -> None:
-        """`worktrees` returns the tab's current worktree list; it is read only when
-        a console is opened, which starts in the first entry.
+        """`worktrees` returns the tab's current worktree list; the feature spec is
+        looked for in its first entry.
 
         `feature_name` and `saved_prompt` return the tab's feature name and its kept
         prompt; they are read each time the panel is shown.
 
         `tab_terminal` returns the tab's terminal (None when it has none); the send
         button is enabled only while it is open, checked when the panel is shown
-        and after each click of the console button.
+        and on update_send_button (the tab calls it after its console button opens one).
 
         `control_files` tells whether the feature spec (`.devpipe/<feature-name>/feature-spec.md`)
         exists in the first worktree; refresh_state checks it and, when it exists, calls
@@ -74,10 +72,6 @@ class DevpipeCreatePanel(QWidget):
         self._tab_terminal = tab_terminal
         self._control_files = control_files
         self._open_plan_panel = open_plan_panel
-        self.open_console_button = OpenConsoleButton(terminals, self._console_folder)
-        self.open_console_button.console_opened.connect(self.console_opened)
-        # Connected after the button's own handler, so the tab already knows the new console.
-        self.open_console_button.clicked.connect(self._update_send_button)
         self.refresh_button = QPushButton(REFRESH_TEXT)
         self.refresh_button.clicked.connect(lambda: self.refresh_state())  # drop the `checked` argument
 
@@ -107,7 +101,6 @@ class DevpipeCreatePanel(QWidget):
         self.send_prompt_button.clicked.connect(lambda: self.send_prompt())  # drop the `checked` argument
 
         buttons = QHBoxLayout()
-        buttons.addWidget(self.open_console_button, alignment=Qt.AlignmentFlag.AlignTop)
         buttons.addWidget(self.refresh_button, alignment=Qt.AlignmentFlag.AlignTop)
         buttons.addStretch()
         layout = QVBoxLayout(self)
@@ -118,7 +111,7 @@ class DevpipeCreatePanel(QWidget):
         layout.addWidget(self.send_prompt_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self._load_saved_prompt()
-        self._update_send_button()
+        self.update_send_button()
 
     def refresh_state(self) -> None:
         """Bring the panel up to date with the tab: the kept prompt (see
@@ -129,8 +122,8 @@ class DevpipeCreatePanel(QWidget):
         A pending prompt edit is reported first, so a refresh never drops it."""
         self.flush_prompt()
         self._load_saved_prompt()
-        self._update_send_button()
-        folder = self._console_folder()
+        self.update_send_button()
+        folder = self._first_worktree()
         if folder is not None and self._control_files.feature_spec_exists(folder, self._feature_name()):
             # Deferred: on show, the stack is still switching to this panel.
             QTimer.singleShot(0, self._open_plan_panel)
@@ -164,7 +157,7 @@ class DevpipeCreatePanel(QWidget):
                 self._terminals.send_to_console(terminal, text, enter=False, soft_newlines=True)
             except TerminalError as error:
                 QMessageBox.warning(self, SEND_PROMPT_ERROR_TITLE, error.message)
-        self._update_send_button()
+        self.update_send_button()
 
     def _open_tab_terminal(self) -> TerminalId | None:
         """The tab's terminal while it is open, else None."""
@@ -173,7 +166,8 @@ class DevpipeCreatePanel(QWidget):
             return None
         return terminal
 
-    def _update_send_button(self) -> None:
+    def update_send_button(self) -> None:
+        """Enable the send button only while the tab's terminal is open."""
         self.send_prompt_button.setEnabled(self._open_tab_terminal() is not None)
 
     def flush_prompt(self) -> None:
@@ -199,7 +193,7 @@ class DevpipeCreatePanel(QWidget):
         if not event.spontaneous():
             self.refresh_state()
         else:
-            self._update_send_button()  # window restore: the terminal may have been closed
+            self.update_send_button()  # window restore: the terminal may have been closed
         super().showEvent(event)
 
     def hideEvent(self, event: QHideEvent) -> None:
@@ -212,6 +206,6 @@ class DevpipeCreatePanel(QWidget):
         self.prompt_input.setMaximumHeight(event.size().height() // 2)
         super().resizeEvent(event)
 
-    def _console_folder(self) -> Path | None:
+    def _first_worktree(self) -> Path | None:
         paths = self._worktrees()
         return paths[0] if paths else None

@@ -96,7 +96,7 @@ def test_refresh_updates_the_send_button(qtbot, make_tab, fake_terminals):
     tab = make_tab()
     tab.show_panel(Panel.DEVPIPE_CREATE)
     panel = tab.devpipe_create_panel
-    click(qtbot, panel.open_console_button)
+    click(qtbot, tab.open_console_button)
     assert panel.send_prompt_button.isEnabled()
     fake_terminals.closed.add(TerminalId("1"))
     click(qtbot, panel.refresh_button)

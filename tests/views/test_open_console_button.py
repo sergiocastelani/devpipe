@@ -108,11 +108,11 @@ def make_tab(qtbot, tab_states, worktree_service, terminal_service):
     return tab
 
 
-def test_create_panel_console_starts_in_the_current_first_worktree(
+def test_tab_console_starts_in_the_current_first_worktree(
     qtbot, tab_states, worktree_service, terminal_service, fake_terminals, tmp_path, warnings
 ):
     tab = make_tab(qtbot, tab_states, worktree_service, terminal_service)
-    button = tab.devpipe_create_panel.open_console_button
+    button = tab.open_console_button
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
     b.mkdir()
@@ -136,7 +136,7 @@ def test_last_console_id_is_kept_in_the_tab_session_not_the_file(
     file_before = path.read_text("utf-8")
     assert tab.session.last_console is None
 
-    button = tab.devpipe_create_panel.open_console_button
+    button = tab.open_console_button
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     tab.session.last_console = None
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)  # brings the same console to front
