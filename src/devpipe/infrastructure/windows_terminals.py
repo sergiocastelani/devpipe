@@ -1,6 +1,8 @@
 """Terminals for Windows: PowerShell in a new console window, typed into via
 WriteConsoleInputW (no Qt). Importable on any OS; only works on Windows."""
 
+import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -8,10 +10,16 @@ from pathlib import Path
 
 from devpipe.models.terminal import TerminalError, TerminalId
 
-DEFAULT_SHELL = ("powershell.exe", "-NoExit", "-NoLogo")
+PWSH_SHELL = ("pwsh.exe", "-NoExit", "-NoLogo")  # PowerShell 7, preferred
+WINDOWS_POWERSHELL_SHELL = ("powershell.exe", "-NoExit", "-NoLogo")  # 5.1, built into Windows
 CONSOLE_INPUT_SCRIPT = Path(__file__).with_name("console_input.py")
 SEND_TIMEOUT_SECONDS = 10
 EXIT_CANNOT_ATTACH = 2  # same value as console_input.EXIT_CANNOT_ATTACH
+# Not inherited by the shell: this variable lists the module folders of the
+# PowerShell devpipe was started from, which may be another PowerShell version
+# than the shell (e.g. 5.1 loading PowerShell 7's PSReadLine prompts "run software
+# from this untrusted publisher?"). Without it, each PowerShell builds its own.
+SHELL_ENV_EXCLUDED = ("PSModulePath",)
 
 UNKNOWN_TERMINAL_MESSAGE = "unknown terminal"
 TERMINAL_CLOSED_MESSAGE = "terminal is closed"
@@ -28,8 +36,9 @@ class WindowsTerminals:
     its own console. Thread-safe.
     """
 
-    def __init__(self, shell: tuple[str, ...] = DEFAULT_SHELL) -> None:
-        self._shell = shell
+    def __init__(self, shell: tuple[str, ...] | None = None) -> None:
+        """`shell` is the command line to start; None means default_shell()."""
+        self._shell = shell if shell is not None else default_shell()
         self._processes: dict[TerminalId, subprocess.Popen[bytes]] = {}
         self._lock = threading.Lock()
 
@@ -37,7 +46,10 @@ class WindowsTerminals:
         """See Terminals.open."""
         try:
             process = subprocess.Popen(
-                list(self._shell), cwd=cwd, creationflags=subprocess.CREATE_NEW_CONSOLE
+                list(self._shell),
+                cwd=cwd,
+                env=_shell_env(),
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
         except OSError as exc:
             raise TerminalError(CANNOT_OPEN_MESSAGE.format(reason=exc.strerror or exc)) from exc
@@ -87,3 +99,14 @@ class WindowsTerminals:
         if process is None:
             raise TerminalError(UNKNOWN_TERMINAL_MESSAGE)
         return process
+
+
+def default_shell() -> tuple[str, ...]:
+    """PowerShell 7 when pwsh.exe is on PATH, otherwise Windows PowerShell 5.1."""
+    return PWSH_SHELL if shutil.which(PWSH_SHELL[0]) else WINDOWS_POWERSHELL_SHELL
+
+
+def _shell_env() -> dict[str, str]:
+    """This process's environment minus SHELL_ENV_EXCLUDED (case-insensitive, as on Windows)."""
+    excluded = {name.upper() for name in SHELL_ENV_EXCLUDED}
+    return {name: value for name, value in os.environ.items() if name.upper() not in excluded}

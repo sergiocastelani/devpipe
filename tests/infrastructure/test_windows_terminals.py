@@ -10,7 +10,11 @@ import time
 import pytest
 
 from devpipe.models.terminal import TerminalError
-from devpipe.infrastructure.windows_terminals import TERMINAL_CLOSED_MESSAGE, WindowsTerminals
+from devpipe.infrastructure.windows_terminals import (
+    TERMINAL_CLOSED_MESSAGE,
+    WindowsTerminals,
+    default_shell,
+)
 
 pytestmark = [
     pytest.mark.skipif(sys.platform != "win32", reason="Windows only"),
@@ -24,7 +28,7 @@ TIMEOUT_SECONDS = 20
 # No profile, and PSReadLine saves nothing: the typed test commands must not end up
 # in the user's PowerShell history (ConsoleHost_history.txt).
 TEST_SHELL = (
-    "powershell.exe", "-NoExit", "-NoLogo", "-NoProfile",
+    *default_shell(), "-NoProfile",
     "-Command", "Set-PSReadLineOption -HistorySaveStyle SaveNothing",
 )
 
@@ -73,6 +77,19 @@ def test_answers_a_prompt(terminals, tmp_path):
     terminals.send_text(terminal, "Bob & Ünïcode {x}")
 
     assert _wait_for_text(tmp_path / "out.txt", "got Bob & Ünïcode {x}") == "got Bob & Ünïcode {x}"
+
+
+def test_shell_does_not_inherit_the_module_path(terminals, tmp_path, monkeypatch):
+    foreign = str(tmp_path / "foreign-modules")
+    monkeypatch.setenv("PSModulePath", foreign)
+    terminal = terminals.open(tmp_path)
+
+    terminals.send_text(
+        terminal,
+        f"($env:PSModulePath -split ';' -contains '{foreign}') | Out-File -Encoding utf8 out.txt",
+    )
+
+    assert _wait_for_text(tmp_path / "out.txt", "False") == "False"
 
 
 def test_send_to_closed_terminal_raises(terminals, tmp_path):
