@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QTabWidget, QToolButton
 
 from devpipe.models.tab_state import TabState, TabStateError
+from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.paths import same_file, with_default_suffix
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
@@ -41,9 +42,11 @@ class MainWindow(QMainWindow):
         worktrees: WorktreeService,
         skills: SkillsService,
         terminals: TerminalService,
+        control_files: ControlFilesService,
     ) -> None:
         super().__init__()
         self._terminals = terminals
+        self._control_files = control_files
         self._window_state = window_state
         self._tab_states = tab_states
         self._worktree_service = worktrees
@@ -91,14 +94,14 @@ class MainWindow(QMainWindow):
 
     def add_new_tab(self) -> PipelineTab:
         """Build an unsaved PipelineTab, add it with add_pipeline_tab, select it, return it."""
-        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals, self._control_files)
         self.tabs.setCurrentIndex(self.add_pipeline_tab(tab))
         return tab
 
     def add_saved_tab(self, path: Path, state: TabState) -> PipelineTab:
         """Build a PipelineTab, apply_saved(path, state) (no write), add it with
         add_pipeline_tab, select it and return it. Does not check for duplicates."""
-        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals, self._control_files)
         tab.apply_saved(path, state)
         index = self.add_pipeline_tab(tab)
         self.tabs.setCurrentIndex(index)

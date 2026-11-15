@@ -8,11 +8,14 @@ from PySide6.QtWidgets import QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalError, TerminalId
+from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.skills_service import SkillsService
 from devpipe.views.pipeline_tab import PipelineTab
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))
+UNUSED_CONTROL_FILES = ControlFilesService(ControlFiles())  # no feature spec in these tests
 
 
 @pytest.fixture
@@ -24,7 +27,7 @@ def warnings(monkeypatch):
 
 @pytest.fixture
 def tab(qtbot, tab_states, worktree_service, terminal_service, tmp_path):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, UNUSED_CONTROL_FILES)
     qtbot.addWidget(tab)
     tab.show()  # show events only reach visible widgets
     tab.apply_saved(tmp_path / "x.json", TabState("feat", Panel.START, [tmp_path], "build it"))

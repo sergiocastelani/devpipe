@@ -13,11 +13,13 @@ from devpipe.models.tab_session import TabSession
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
 from devpipe.models.terminal import TerminalId
 from devpipe.models.worktree import WorktreeRequest, WorktreeResult
+from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
 from devpipe.services.terminal_service import TerminalService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.devpipe_create_panel import DevpipeCreatePanel
+from devpipe.views.devpipe_plan_panel import DevpipePlanPanel
 from devpipe.views.new_worktree_panel import NewWorktreePanel
 from devpipe.views.start_panel import StartPanel
 from devpipe.views.worktree_worker import WorktreeWorker
@@ -37,6 +39,7 @@ class PipelineTab(QWidget):
         worktrees: WorktreeService,
         skills: SkillsService,
         terminals: TerminalService,
+        control_files: ControlFilesService,
     ) -> None:
         super().__init__()
         self._tab_states = tab_states
@@ -64,14 +67,19 @@ class PipelineTab(QWidget):
             lambda: self._feature_name or "",
             lambda: self._create_prompt,
             lambda: self.session.last_console,
+            control_files,
+            self._open_plan_panel,
         )
         self.stack.addWidget(self.devpipe_create_panel)
+        self.devpipe_plan_panel = DevpipePlanPanel()
+        self.stack.addWidget(self.devpipe_plan_panel)
         self.stack.setCurrentWidget(self.start_panel)
         # The single map from panel id to panel widget.
         self._panels: dict[Panel, QWidget] = {
             Panel.START: self.start_panel,
             Panel.NEW_WORKTREE: self.new_worktree_panel,
             Panel.DEVPIPE_CREATE: self.devpipe_create_panel,
+            Panel.DEVPIPE_PLAN: self.devpipe_plan_panel,
         }
 
         layout = QVBoxLayout(self)
@@ -214,6 +222,9 @@ class PipelineTab(QWidget):
 
     def _remember_console(self, terminal: TerminalId) -> None:
         self.session.last_console = terminal
+
+    def _open_plan_panel(self) -> None:
+        self.show_panel(Panel.DEVPIPE_PLAN)
 
     def _set_create_prompt(self, prompt: str) -> None:
         """Keep the edited prompt and, when saved, rewrite the state file (no write when unchanged).
