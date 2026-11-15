@@ -1,14 +1,15 @@
-"""One pipeline tab: the console button on top, then a stack of panels, exactly
+"""One pipeline tab: the console and Refresh buttons on top, then a stack of panels, exactly
 one shown at a time, filling the rest of the tab.
 
 New panels are added to `stack` and `_panels`; the start panel is always the first one.
 Only panels in PERSISTED_PANELS are written as `active_panel`.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Signal, Slot
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
 from devpipe.models.tab_session import TabSession
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
@@ -29,6 +30,8 @@ from devpipe.views.worktree_worker import WorktreeWorker
 NEW_TAB_TITLE = "New pipeline"
 SAVE_ERROR_TITLE = "Cannot save state file"
 RUN_ERROR_TITLE = "Worktree creation failed"
+REFRESH_TEXT = "🔄"
+REFRESH_TOOLTIP = "Refresh"
 
 
 class PipelineTab(QWidget):
@@ -60,6 +63,14 @@ class PipelineTab(QWidget):
 
         # Always available, whatever the panel: the console starts in the first worktree.
         self.open_console_button = OpenConsoleButton(terminals, self._first_worktree)
+        self.refresh_button = QPushButton(REFRESH_TEXT)
+        self.refresh_button.setFixedSize(64, 64)
+        self.refresh_button.setToolTip(REFRESH_TOOLTIP)
+        refresh_font = self.refresh_button.font()
+        refresh_font.setPointSize(24)
+        self.refresh_button.setFont(refresh_font)
+
+        self.refresh_button.clicked.connect(lambda: self._refresh_panel()) 
 
         self.stack = QStackedWidget()
         self.start_panel = StartPanel(skills)
@@ -89,6 +100,7 @@ class PipelineTab(QWidget):
 
         top_bar = QHBoxLayout()
         top_bar.addWidget(self.open_console_button)
+        top_bar.addWidget(self.refresh_button)
         top_bar.addStretch()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -108,6 +120,10 @@ class PipelineTab(QWidget):
         # Connected after the button's own handler, so the tab already knows the new console.
         self.open_console_button.clicked.connect(self.devpipe_create_panel.update_send_button)
         self.devpipe_create_panel.prompt_changed.connect(self._set_create_prompt)
+        # Panels with a refresh; Refresh refreshes the active one.
+        self._refreshers: dict[Panel, Callable[[], None]] = {
+            Panel.DEVPIPE_CREATE: self.devpipe_create_panel.refresh_state,
+        }
 
     @property
     def run_in_progress(self) -> bool:
@@ -240,6 +256,12 @@ class PipelineTab(QWidget):
 
     def _remember_console(self, terminal: TerminalId) -> None:
         self.session.last_console = terminal
+
+    def _refresh_panel(self) -> None:
+        """Refresh the active panel; no-op when it has no refresh."""
+        refresher = self._refreshers.get(self._active_panel)
+        if refresher is not None:
+            refresher()
 
     def _open_plan_panel(self) -> None:
         self.show_panel(Panel.DEVPIPE_PLAN)

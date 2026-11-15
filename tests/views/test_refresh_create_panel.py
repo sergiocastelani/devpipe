@@ -54,7 +54,7 @@ def test_refresh_without_the_spec_stays_on_the_create_panel(qtbot, make_tab, wor
     tab = make_tab()
     tab.show_panel(Panel.DEVPIPE_CREATE)
     make_feature_folder(worktree)  # the folder alone is not enough
-    click(qtbot, tab.devpipe_create_panel.refresh_button)
+    click(qtbot, tab.refresh_button)
     qtbot.wait(50)  # let a queued switch run, if any
     assert tab.active_panel is Panel.DEVPIPE_CREATE
 
@@ -63,7 +63,7 @@ def test_refresh_with_the_spec_shows_the_plan_panel_and_saves_it(qtbot, make_tab
     tab = make_tab()
     tab.show_panel(Panel.DEVPIPE_CREATE)
     make_feature_spec(worktree)
-    click(qtbot, tab.devpipe_create_panel.refresh_button)
+    click(qtbot, tab.refresh_button)
     qtbot.waitUntil(lambda: tab.active_panel is Panel.DEVPIPE_PLAN, timeout=WAIT_MS)
     assert tab.stack.currentWidget() is tab.devpipe_plan_panel
     assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8"))["active_panel"] == "devpipe-plan"
@@ -87,7 +87,7 @@ def test_refresh_keeps_a_pending_prompt_edit(qtbot, make_tab, tmp_path):
     tab.show_panel(Panel.DEVPIPE_CREATE)
     panel = tab.devpipe_create_panel
     panel.prompt_input.setPlainText("new text")  # pending: the save delay has not passed
-    click(qtbot, panel.refresh_button)
+    click(qtbot, tab.refresh_button)
     assert panel.prompt_input.toPlainText() == "new text"
     assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8"))["create_prompt"] == "new text"
 
@@ -99,5 +99,13 @@ def test_refresh_updates_the_send_button(qtbot, make_tab, fake_terminals):
     click(qtbot, tab.open_console_button)
     assert panel.send_prompt_button.isEnabled()
     fake_terminals.closed.add(TerminalId("1"))
-    click(qtbot, panel.refresh_button)
+    click(qtbot, tab.refresh_button)
     assert not panel.send_prompt_button.isEnabled()
+
+
+def test_refresh_only_refreshes_the_active_panel(qtbot, make_tab, worktree):
+    tab = make_tab()  # start panel active
+    make_feature_spec(worktree)
+    click(qtbot, tab.refresh_button)
+    qtbot.wait(50)  # let a queued switch run, if any
+    assert tab.active_panel is Panel.START

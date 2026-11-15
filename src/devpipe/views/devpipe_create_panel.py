@@ -6,7 +6,6 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
@@ -27,7 +26,6 @@ PENDING_MARK = " *"
 
 SEND_PROMPT_TEXT = "Send prompt to terminal"
 SEND_PROMPT_ERROR_TITLE = "Cannot send prompt"
-REFRESH_TEXT = "Refresh"
 TITLE_TEXT = "Create Feature Spec"
 
 
@@ -72,8 +70,6 @@ class DevpipeCreatePanel(QWidget):
         self._tab_terminal = tab_terminal
         self._control_files = control_files
         self._open_plan_panel = open_plan_panel
-        self.refresh_button = QPushButton(REFRESH_TEXT)
-        self.refresh_button.clicked.connect(lambda: self.refresh_state())  # drop the `checked` argument
 
         self.title_label = QLabel(TITLE_TEXT)
         title_font = self.title_label.font()
@@ -100,12 +96,8 @@ class DevpipeCreatePanel(QWidget):
         self.send_prompt_button = QPushButton(SEND_PROMPT_TEXT)
         self.send_prompt_button.clicked.connect(lambda: self.send_prompt())  # drop the `checked` argument
 
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.refresh_button, alignment=Qt.AlignmentFlag.AlignTop)
-        buttons.addStretch()
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
-        layout.addLayout(buttons)
         layout.addWidget(self.prompt_label)
         layout.addWidget(self.prompt_input, stretch=1)  # capped at half the panel in resizeEvent
         layout.addWidget(self.send_prompt_button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -117,7 +109,7 @@ class DevpipeCreatePanel(QWidget):
         """Bring the panel up to date with the tab: the kept prompt (see
         _load_saved_prompt), the send button, and the feature spec, calling
         open_plan_panel when `<first worktree>/.devpipe/<feature-name>/feature-spec.md`
-        exists. Called on show (not on a window restore) and by the Refresh button.
+        exists. Called on show (not on a window restore) and by the tab's Refresh button.
 
         A pending prompt edit is reported first, so a refresh never drops it."""
         self.flush_prompt()
