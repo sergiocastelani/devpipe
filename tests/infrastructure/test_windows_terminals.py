@@ -3,7 +3,9 @@
 Opt-in: set DEVPIPE_TERMINAL_TESTS=1. Windows only.
 """
 
+import json
 import os
+import shutil
 import sys
 import time
 
@@ -94,6 +96,54 @@ def test_shell_does_not_inherit_the_module_path(terminals, tmp_path, monkeypatch
     )
 
     assert _wait_for_text(tmp_path / "out.txt", "False") == "False"
+
+
+def test_soft_newlines_do_not_submit_in_powershell(terminals, tmp_path):
+    terminal = terminals.open(tmp_path)
+
+    # Ctrl+J is a new line, not a submit, so both lines run as one command and
+    # no history entry is added in between; plain Enters would run line 1 first.
+    terminals.send_text(
+        terminal,
+        "$c = (Get-History).Count\n((Get-History).Count - $c) | Out-File -Encoding utf8 out.txt",
+        soft_newlines=True,
+    )
+
+    assert _wait_for_text(tmp_path / "out.txt", "0") == "0"
+
+
+RAW_KEYS_SCRIPT = """
+const fs = require("fs");
+process.stdin.setRawMode(true);
+process.stdin.on("data", (d) => {
+  fs.appendFileSync(process.argv[2], JSON.stringify(d.toString("utf8")) + "\\n");
+  if (d.includes(0x71)) process.exit(0); // 'q' ends it
+});
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_soft_newlines_reach_a_raw_mode_program_as_line_feeds(tmp_path):
+    # Raw-mode programs such as Claude Code tell a new line ("\n") from a submit ("\r").
+    script, out = tmp_path / "raw_keys.js", tmp_path / "keys.txt"
+    script.write_text(RAW_KEYS_SCRIPT, "utf-8")
+    terminals = WindowsTerminals(("node", str(script), str(out)))
+    terminal = terminals.open(tmp_path)
+    try:
+        deadline = time.monotonic() + TIMEOUT_SECONDS
+        while time.monotonic() < deadline:  # wait for node to switch to raw mode
+            terminals.send_text(terminal, "x", enter=False)
+            if out.exists():
+                break
+            time.sleep(0.5)
+        terminals.send_text(terminal, "a\nb q", enter=False, soft_newlines=True)
+        typed = ""
+        while time.monotonic() < deadline and not typed.endswith("q"):
+            time.sleep(0.2)
+            typed = "".join(json.loads(line) for line in out.read_text("utf-8").splitlines())
+        assert typed.lstrip("x") == "a\nb q"
+    finally:
+        terminals.close(terminal)
 
 
 def test_send_to_closed_terminal_raises(terminals, tmp_path):

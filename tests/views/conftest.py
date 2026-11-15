@@ -69,16 +69,19 @@ class FakeGitWorktrees:
 
 
 class FakeTerminals:
-    """Terminals for view tests: records the folders opened and the terminals brought
-    to front, and issues TerminalId("1"), ("2"), ... `open_error`, when set, is raised
-    by open; `front_error` by bring_to_front. `closed` simulates the user closing a window."""
+    """Terminals for view tests: records the folders opened, the terminals brought
+    to front and the text sent, and issues TerminalId("1"), ("2"), ... `open_error`,
+    when set, is raised by open; `front_error` by bring_to_front; `send_error` by
+    send_text. `closed` simulates the user closing a window."""
 
     def __init__(self) -> None:
         self.opened: list[Path] = []
         self.fronted: list[TerminalId] = []
+        self.sent: list[tuple[TerminalId, str, bool, bool]] = []  # (terminal, text, enter, soft_newlines)
         self.closed: set[TerminalId] = set()
         self.open_error: TerminalError | None = None
         self.front_error: TerminalError | None = None
+        self.send_error: TerminalError | None = None
 
     def open(self, cwd):
         if self.open_error is not None:
@@ -86,8 +89,10 @@ class FakeTerminals:
         self.opened.append(cwd)
         return TerminalId(str(len(self.opened)))
 
-    def send_text(self, terminal, text, enter=True):
-        pass
+    def send_text(self, terminal, text, enter=True, *, soft_newlines=False):
+        if self.send_error is not None:
+            raise self.send_error
+        self.sent.append((terminal, text, enter, soft_newlines))
 
     def is_open(self, terminal):
         return terminal not in self.closed

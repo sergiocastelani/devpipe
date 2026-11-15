@@ -18,9 +18,12 @@ class Terminals(Protocol):
         Raises TerminalError (only) when it cannot be opened."""
         ...
 
-    def send_text(self, terminal: TerminalId, text: str, enter: bool = True) -> None:
+    def send_text(
+        self, terminal: TerminalId, text: str, enter: bool = True, *, soft_newlines: bool = False
+    ) -> None:
         """Type `text` into the terminal as if the user typed it, then press Enter
-        when `enter` is True. A "\\n" in `text` is typed as Enter. Works for shell
+        when `enter` is True. A "\\n" in `text` is typed as Enter, or as Ctrl+J
+        when `soft_newlines` (a new line in the input, not a submit). Works for shell
         commands and for answering prompts of the running program. Raises
         TerminalError (only) when the terminal is closed or cannot be written to."""
         ...
@@ -76,6 +79,21 @@ class TerminalService:
         terminal = self._terminals.open(cwd)
         self._consoles[folder] = terminal
         return terminal
+
+    def is_console_open(self, terminal: TerminalId) -> bool:
+        """The terminal (e.g. one returned by open_console) is still open."""
+        return self._terminals.is_open(terminal)
+
+    def send_to_console(
+        self, terminal: TerminalId, text: str, enter: bool = True, *, soft_newlines: bool = False
+    ) -> None:
+        """Bring the terminal's window to the foreground, then type `text` into it
+        (then Enter when `enter`; `soft_newlines` as in Terminals.send_text).
+        Raises TerminalError when the terminal is closed or either step fails."""
+        if not self._terminals.is_open(terminal):
+            raise TerminalError(NO_TERMINAL_MESSAGE)
+        self._terminals.bring_to_front(terminal)
+        self._terminals.send_text(terminal, text, enter, soft_newlines=soft_newlines)
 
     def send(self, key: str, text: str, enter: bool = True) -> None:
         """Type `text` (then Enter when `enter`) into the terminal of `key`.

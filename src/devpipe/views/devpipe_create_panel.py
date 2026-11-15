@@ -5,8 +5,9 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent
-from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
+from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.services.terminal_service import TerminalService
 from devpipe.views.open_console_button import OpenConsoleButton
 
@@ -15,6 +16,14 @@ PROMPT_SAVE_DELAY_MS = 5000
 
 PENDING_MARK = " *"
 """Appended to the prompt label while an edit is waiting to be reported."""
+
+SEND_PROMPT_TEXT = "Send prompt to terminal"
+SEND_PROMPT_ERROR_TITLE = "Cannot send prompt"
+
+
+def create_command(feature_name: str, prompt: str) -> str:
+    """The text typed into the terminal: the '/devpipe-create' command, then the prompt."""
+    return f"/devpipe-create {feature_name} \n {prompt}"
 
 
 class DevpipeCreatePanel(QWidget):
@@ -29,18 +38,27 @@ class DevpipeCreatePanel(QWidget):
         worktrees: Callable[[], list[Path]],
         feature_name: Callable[[], str],
         saved_prompt: Callable[[], str],
+        tab_terminal: Callable[[], TerminalId | None],
     ) -> None:
         """`worktrees` returns the tab's current worktree list; it is read only when
         a console is opened, which starts in the first entry.
 
         `feature_name` and `saved_prompt` return the tab's feature name and its kept
-        prompt; they are read each time the panel is shown."""
+        prompt; they are read each time the panel is shown.
+
+        `tab_terminal` returns the tab's terminal (None when it has none); the send
+        button is enabled only while it is open, checked when the panel is shown
+        and after each click of the console button."""
         super().__init__()
         self._worktrees = worktrees
         self._feature_name = feature_name
         self._saved_prompt = saved_prompt
+        self._terminals = terminals
+        self._tab_terminal = tab_terminal
         self.open_console_button = OpenConsoleButton(terminals, self._console_folder)
         self.open_console_button.console_opened.connect(self.console_opened)
+        # Connected after the button's own handler, so the tab already knows the new console.
+        self.open_console_button.clicked.connect(self._update_send_button)
 
         self.prompt_label = QLabel()
         self._label_text = ""
@@ -57,14 +75,19 @@ class DevpipeCreatePanel(QWidget):
         self._save_timer.timeout.connect(self._report_prompt)
         self.prompt_input.textChanged.connect(self._start_save_timer)
 
+        self.send_prompt_button = QPushButton(SEND_PROMPT_TEXT)
+        self.send_prompt_button.clicked.connect(lambda: self.send_prompt())  # drop the `checked` argument
+
         layout = QVBoxLayout(self)
         layout.addWidget(
             self.open_console_button, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
         )
         layout.addWidget(self.prompt_label)
         layout.addWidget(self.prompt_input, stretch=1)  # capped at half the panel in resizeEvent
+        layout.addWidget(self.send_prompt_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self._load_saved_prompt()
+        self._update_send_button()
 
     def _load_saved_prompt(self) -> None:
         """Show the label for the tab's feature name and put the tab's kept prompt in
@@ -81,6 +104,31 @@ class DevpipeCreatePanel(QWidget):
             self.prompt_input.setPlainText(prompt)
         finally:
             self.prompt_input.blockSignals(False)
+
+    def send_prompt(self) -> None:
+        """Bring the tab's terminal to the foreground and type the '/devpipe-create'
+        command and the prompt into it, without pressing Enter at the end. Every
+        line break is typed as Ctrl+J (new line, not submit), so the agent gets one multi-line message.
+
+        On failure shows a warning; the button state is refreshed either way."""
+        terminal = self._open_tab_terminal()
+        if terminal is not None:
+            text = create_command(self._feature_name(), self.prompt_input.toPlainText())
+            try:
+                self._terminals.send_to_console(terminal, text, enter=False, soft_newlines=True)
+            except TerminalError as error:
+                QMessageBox.warning(self, SEND_PROMPT_ERROR_TITLE, error.message)
+        self._update_send_button()
+
+    def _open_tab_terminal(self) -> TerminalId | None:
+        """The tab's terminal while it is open, else None."""
+        terminal = self._tab_terminal()
+        if terminal is None or not self._terminals.is_console_open(terminal):
+            return None
+        return terminal
+
+    def _update_send_button(self) -> None:
+        self.send_prompt_button.setEnabled(self._open_tab_terminal() is not None)
 
     def flush_prompt(self) -> None:
         """Report a pending edit now instead of waiting for the delay; no-op when none is pending."""
@@ -104,6 +152,7 @@ class DevpipeCreatePanel(QWidget):
         # No edit can be pending here; hideEvent reported it.
         if not event.spontaneous():
             self._load_saved_prompt()
+        self._update_send_button()  # also on window restore: the terminal may have been closed
         super().showEvent(event)
 
     def hideEvent(self, event: QHideEvent) -> None:

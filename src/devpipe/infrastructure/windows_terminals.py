@@ -64,13 +64,15 @@ class WindowsTerminals:
             self._processes[terminal] = process
         return terminal
 
-    def send_text(self, terminal: TerminalId, text: str, enter: bool = True) -> None:
+    def send_text(
+        self, terminal: TerminalId, text: str, enter: bool = True, *, soft_newlines: bool = False
+    ) -> None:
         """See Terminals.send_text."""
         if not self.is_open(terminal):
             raise TerminalError(TERMINAL_CLOSED_MESSAGE)
         _run_helper(
             CONSOLE_INPUT_SCRIPT,
-            [terminal.value, "1" if enter else "0"],
+            [terminal.value, "1" if enter else "0", "1" if soft_newlines else "0"],
             text.encode("utf-8"),
             CANNOT_SEND_MESSAGE,
         )

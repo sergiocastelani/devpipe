@@ -1,8 +1,10 @@
 """Helper script (Windows only): type text into another process's console.
 
-Run as `python -I console_input.py <pid> <enter 0|1>` with the text as UTF-8 on
-stdin. It is a separate process because AttachConsole first requires leaving
-the caller's own console, which the devpipe process must keep.
+Run as `python -I console_input.py <pid> <enter 0|1> [<soft_newlines 0|1>]` with
+the text as UTF-8 on stdin. With soft_newlines 1, each "\\n" in the text is typed
+as Ctrl+J (a new line in the input, not a submit); the Enter added by `enter` is
+always a plain Enter. It is a separate process because AttachConsole first
+requires leaving the caller's own console, which the devpipe process must keep.
 
 Exit codes: 0 written, 2 cannot attach (process gone or has no console),
 1 any other failure (message on stderr).
@@ -14,7 +16,9 @@ from ctypes import wintypes
 
 KEY_EVENT = 0x0001
 SHIFT_PRESSED = 0x0010
+LEFT_CTRL_PRESSED = 0x0008
 VK_RETURN = 0x0D
+VK_J = 0x4A
 VK_PACKET = 0xE7  # "a Unicode character with no key of its own"
 GENERIC_READ_WRITE = 0x80000000 | 0x40000000
 FILE_SHARE_READ_WRITE = 0x1 | 0x2
@@ -47,8 +51,13 @@ class _InputRecord(ctypes.Structure):
     _fields_ = [("EventType", wintypes.WORD), ("Event", _Event)]
 
 
-def _key_records(text: str, user32: ctypes.WinDLL) -> list[_InputRecord]:
-    """A key-down and a key-up record per character; "\\n" becomes Enter.
+def _key_records(text: str, user32: ctypes.WinDLL, soft_newlines: bool = False) -> list[_InputRecord]:
+    """A key-down and a key-up record per character; "\\n" becomes Enter, or
+    Ctrl+J when `soft_newlines`.
+
+    Why Ctrl+J and not Shift+Enter: console programs that read characters, such
+    as Node ones (Claude Code), get Shift+Enter as "\\r", the same as Enter, so it
+    submits. Ctrl+J carries a line feed ("\\n"), their "new line" key.
 
     Virtual key codes matter: PowerShell's line editor (PSReadLine) reads keys,
     not just characters. Characters the keyboard layout can only type with
@@ -56,7 +65,9 @@ def _key_records(text: str, user32: ctypes.WinDLL) -> list[_InputRecord]:
     """
     records: list[_InputRecord] = []
     for char in text.replace("\r\n", "\n"):
-        if char == "\n":
+        if char == "\n" and soft_newlines:
+            vk, state = VK_J, LEFT_CTRL_PRESSED  # char stays "\n"
+        elif char == "\n":
             char, vk, state = "\r", VK_RETURN, 0
         else:
             scan = user32.VkKeyScanW(char)
@@ -82,7 +93,8 @@ def _key_records(text: str, user32: ctypes.WinDLL) -> list[_InputRecord]:
 
 def main(argv: list[str]) -> int:
     pid, enter = int(argv[1]), argv[2] == "1"
-    text = sys.stdin.buffer.read().decode("utf-8") + ("\n" if enter else "")
+    soft_newlines = len(argv) > 3 and argv[3] == "1"
+    text = sys.stdin.buffer.read().decode("utf-8")
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     kernel32.CreateFileW.restype = wintypes.HANDLE
@@ -107,7 +119,9 @@ def main(argv: list[str]) -> int:
         print(f"cannot open console input (error {ctypes.get_last_error()})", file=sys.stderr)
         return 1
     try:
-        records = _key_records(text, user32)
+        records = _key_records(text, user32, soft_newlines)
+        if enter:
+            records += _key_records("\n", user32)  # always a plain Enter: submits
         array = (_InputRecord * len(records))(*records)
         base = ctypes.addressof(array)
         record_size = ctypes.sizeof(_InputRecord)

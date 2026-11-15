@@ -22,8 +22,8 @@ class FakeTerminals:
         self.opened.append(cwd)
         return TerminalId(str(len(self.opened)))
 
-    def send_text(self, terminal, text, enter=True):
-        self.sent.append((terminal, text, enter))
+    def send_text(self, terminal, text, enter=True, *, soft_newlines=False):
+        self.sent.append((terminal, text, enter, soft_newlines))
 
     def is_open(self, terminal):
         return terminal not in self.closed
@@ -64,7 +64,7 @@ def test_send_goes_to_the_terminal_of_the_key(tmp_path):
     service.send("tab-b", "git status")
     service.send("tab-a", "y", enter=False)
 
-    assert fake.sent == [(TerminalId("2"), "git status", True), (TerminalId("1"), "y", False)]
+    assert fake.sent == [(TerminalId("2"), "git status", True, False), (TerminalId("1"), "y", False, False)]
 
 
 def test_send_without_terminal_raises(tmp_path):
@@ -162,3 +162,28 @@ def test_open_console_rejects_missing_folder(tmp_path):
     with pytest.raises(TerminalError, match=FOLDER_MISSING_MESSAGE):
         TerminalService(fake).open_console(tmp_path / "missing")
     assert fake.opened == []
+
+
+def test_send_to_console_brings_it_to_front_then_types(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    terminal = service.open_console(tmp_path)
+
+    service.send_to_console(terminal, "a\nb", enter=False)
+    service.send_to_console(terminal, "c\nd", soft_newlines=True)
+
+    assert fake.fronted == [terminal, terminal]
+    assert fake.sent == [(terminal, "a\nb", False, False), (terminal, "c\nd", True, True)]
+    assert service.is_console_open(terminal) is True
+
+
+def test_send_to_closed_console_raises(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+    terminal = service.open_console(tmp_path)
+    fake.closed.add(terminal)
+
+    assert service.is_console_open(terminal) is False
+    with pytest.raises(TerminalError, match=NO_TERMINAL_MESSAGE):
+        service.send_to_console(terminal, "dir")
+    assert fake.fronted == [] and fake.sent == []

@@ -63,6 +63,7 @@ class PipelineTab(QWidget):
             lambda: self._worktrees,
             lambda: self._feature_name or "",
             lambda: self._create_prompt,
+            lambda: self.session.last_console,
         )
         self.stack.addWidget(self.devpipe_create_panel)
         self.stack.setCurrentWidget(self.start_panel)
