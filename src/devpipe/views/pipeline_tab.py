@@ -9,10 +9,13 @@ from pathlib import Path
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
+from devpipe.models.tab_session import TabSession
 from devpipe.models.tab_state import PERSISTED_PANELS, Panel, TabState, TabStateError
+from devpipe.models.terminal import TerminalId
 from devpipe.models.worktree import WorktreeRequest, WorktreeResult
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
+from devpipe.services.terminal_service import TerminalService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.devpipe_create_panel import DevpipeCreatePanel
 from devpipe.views.new_worktree_panel import NewWorktreePanel
@@ -29,7 +32,11 @@ class PipelineTab(QWidget):
     run_finished = Signal()  # emitted after a run's outcome was applied (results, recovery or warning)
 
     def __init__(
-        self, tab_states: TabStateService, worktrees: WorktreeService, skills: SkillsService
+        self,
+        tab_states: TabStateService,
+        worktrees: WorktreeService,
+        skills: SkillsService,
+        terminals: TerminalService,
     ) -> None:
         super().__init__()
         self._tab_states = tab_states
@@ -41,13 +48,15 @@ class PipelineTab(QWidget):
         # The tab's worktree folders; every state file write carries it. Other code
         # may replace or append to it, and the next write persists it.
         self._worktrees: list[Path] = []
+        # Runtime info for this app session only; never written to the state file.
+        self.session = TabSession()
 
         self.stack = QStackedWidget()
         self.start_panel = StartPanel(skills)
         self.stack.addWidget(self.start_panel)
         self.new_worktree_panel = NewWorktreePanel()
         self.stack.addWidget(self.new_worktree_panel)
-        self.devpipe_create_panel = DevpipeCreatePanel()
+        self.devpipe_create_panel = DevpipeCreatePanel(terminals, lambda: self._worktrees)
         self.stack.addWidget(self.devpipe_create_panel)
         self.stack.setCurrentWidget(self.start_panel)
         # The single map from panel id to panel widget.
@@ -66,6 +75,7 @@ class PipelineTab(QWidget):
         self.start_panel.worktree_folder_chosen.connect(self._set_single_worktree)
         self.start_panel.start_pipeline_requested.connect(lambda: self.show_panel(Panel.DEVPIPE_CREATE))
         self.new_worktree_panel.create_requested.connect(self._start_run)
+        self.devpipe_create_panel.console_opened.connect(self._remember_console)
 
     @property
     def run_in_progress(self) -> bool:
@@ -117,7 +127,7 @@ class PipelineTab(QWidget):
         if path not in self._worktrees:
             return
         self._worktrees = [p for p in self._worktrees if p != path]
-        self.start_panel.show_worktrees(self._worktrees)
+        self._show_worktrees()
         if self._state_path is not None:
             self._write(self._state_path, self._current_state())
 
@@ -125,7 +135,7 @@ class PipelineTab(QWidget):
         """Make `path` the only entry of the worktree list, without writing; the
         show_panel that follows on "Start Pipeline" persists it."""
         self._worktrees = [path]
-        self.start_panel.show_worktrees(self._worktrees)
+        self._show_worktrees()
 
     def apply_saved(self, path: Path, state: TabState) -> None:
         """Put the tab in saved mode for `path` and `state` without writing."""
@@ -133,7 +143,7 @@ class PipelineTab(QWidget):
         self._feature_name = state.feature_name
         self._worktrees = list(state.worktrees)
         self.start_panel.show_saved(state.feature_name)
-        self.start_panel.show_worktrees(state.worktrees)
+        self._show_worktrees()
         self._display(state.active_panel)
         self.identity_changed.emit()
 
@@ -167,7 +177,7 @@ class PipelineTab(QWidget):
         self.new_worktree_panel.set_busy(False)
         created = [result.target for result in results if result.ok]
         self._worktrees = self._worktree_service.merge_paths(self._worktrees, created)
-        self.start_panel.show_worktrees(self._worktrees)
+        self._show_worktrees()
         if all(result.ok for result in results):
             self.show_panel(Panel.START)  # its auto-save is the single write
         else:
@@ -187,6 +197,13 @@ class PipelineTab(QWidget):
         worker, self._worker = self._worker, None
         worker.deleteLater()
         self.run_finished.emit()
+
+    def _show_worktrees(self) -> None:
+        """Show the worktree list on the start panel (the create panel reads it on demand)."""
+        self.start_panel.show_worktrees(self._worktrees)
+
+    def _remember_console(self, terminal: TerminalId) -> None:
+        self.session.last_console = terminal
 
     def _display(self, panel: Panel) -> None:
         self.stack.setCurrentWidget(self._panels[panel])

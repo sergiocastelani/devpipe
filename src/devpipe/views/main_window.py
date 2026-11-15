@@ -11,6 +11,7 @@ from devpipe.services.paths import same_file, with_default_suffix
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
+from devpipe.services.terminal_service import TerminalService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.pipeline_tab import PipelineTab
@@ -39,8 +40,10 @@ class MainWindow(QMainWindow):
         session: SessionService,
         worktrees: WorktreeService,
         skills: SkillsService,
+        terminals: TerminalService,
     ) -> None:
         super().__init__()
+        self._terminals = terminals
         self._window_state = window_state
         self._tab_states = tab_states
         self._worktree_service = worktrees
@@ -88,14 +91,14 @@ class MainWindow(QMainWindow):
 
     def add_new_tab(self) -> PipelineTab:
         """Build an unsaved PipelineTab, add it with add_pipeline_tab, select it, return it."""
-        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals)
         self.tabs.setCurrentIndex(self.add_pipeline_tab(tab))
         return tab
 
     def add_saved_tab(self, path: Path, state: TabState) -> PipelineTab:
         """Build a PipelineTab, apply_saved(path, state) (no write), add it with
         add_pipeline_tab, select it and return it. Does not check for duplicates."""
-        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills)
+        tab = PipelineTab(self._tab_states, self._worktree_service, self._skills, self._terminals)
         tab.apply_saved(path, state)
         index = self.add_pipeline_tab(tab)
         self.tabs.setCurrentIndex(index)

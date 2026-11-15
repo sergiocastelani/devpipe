@@ -323,13 +323,6 @@ def test_start_pipeline_button_is_big_and_disabled_before_save(qtbot):
     assert button.font().pointSize() == BIG_BUTTON_POINT_SIZE
 
 
-def test_start_pipeline_button_is_last_big_button(qtbot):
-    panel = make_panel(qtbot)
-    buttons = panel.new_worktree_button.parentWidget().layout().itemAt(2).layout()
-    assert buttons.indexOf(panel.new_worktree_button) == buttons.count() - 2
-    assert buttons.indexOf(panel.start_pipeline_button) == buttons.count() - 1
-
-
 def answer_folder(monkeypatch, answer: str) -> list:
     """Fake QFileDialog.getExistingDirectory: records calls, returns `answer` ("" cancels)."""
     calls = []

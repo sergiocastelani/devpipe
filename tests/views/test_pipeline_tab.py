@@ -10,15 +10,17 @@ from devpipe.models.tab_state import Panel, TabState
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
 from devpipe.views.new_worktree_panel import NewWorktreePanel
+from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
 from devpipe.views.start_panel import StartPanel
 
 EXPECTED_FILE = {"version": 2, "feature_name": "x", "active_panel": "start", "worktrees": []}
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
+UNUSED_TERMINALS = TerminalService(None)  # never opens a console in these tests
 
 
 def make_tab(qtbot, tab_states, worktree_service):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS)
     qtbot.addWidget(tab)
     return tab
 

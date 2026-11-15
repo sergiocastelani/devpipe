@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.models.worktree import GitWorktreeError
 from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.skills_files import SkillsFiles
@@ -12,6 +13,7 @@ from devpipe.persistence.tab_state_repository import TabStateRepository
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
+from devpipe.services.terminal_service import TerminalService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.main_window import MainWindow
@@ -66,6 +68,40 @@ class FakeGitWorktrees:
             self.branches.discard((source, branch))
 
 
+class FakeTerminals:
+    """Terminals for view tests: records the folders opened and issues TerminalId("1"),
+    ("2"), ... `open_error`, when set, is raised by open."""
+
+    def __init__(self) -> None:
+        self.opened: list[Path] = []
+        self.open_error: TerminalError | None = None
+
+    def open(self, cwd):
+        if self.open_error is not None:
+            raise self.open_error
+        self.opened.append(cwd)
+        return TerminalId(str(len(self.opened)))
+
+    def send_text(self, terminal, text, enter=True):
+        pass
+
+    def is_open(self, terminal):
+        return True
+
+    def close(self, terminal):
+        pass
+
+
+@pytest.fixture
+def fake_terminals() -> FakeTerminals:
+    return FakeTerminals()
+
+
+@pytest.fixture
+def terminal_service(fake_terminals) -> TerminalService:
+    return TerminalService(fake_terminals)
+
+
 @pytest.fixture
 def tab_states() -> TabStateService:
     return TabStateService(TabStateRepository())
@@ -82,7 +118,7 @@ def worktree_service(fake_git) -> WorktreeService:
 
 
 @pytest.fixture
-def make_window(qtbot, tmp_path, tab_states, worktree_service) -> Callable[[], MainWindow]:
+def make_window(qtbot, tmp_path, tab_states, worktree_service, terminal_service) -> Callable[[], MainWindow]:
     """Return a callable building a new MainWindow with real repositories on
     tmp_path / "config.json" (same file on every call: a second call simulates a
     restart). Each window is registered with qtbot.addWidget."""
@@ -95,6 +131,7 @@ def make_window(qtbot, tmp_path, tab_states, worktree_service) -> Callable[[], M
             SessionService(config),
             worktree_service,
             SkillsService(SkillsFiles(), tmp_path / "ai-skills"),  # skills flow: test_install_skills.py
+            terminal_service,
         )
         qtbot.addWidget(window)
         return window

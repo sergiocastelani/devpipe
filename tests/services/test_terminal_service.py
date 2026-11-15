@@ -90,3 +90,22 @@ def test_close_closes_and_forgets(tmp_path):
 
     assert fake.closed == {TerminalId("1")}
     assert service.is_open("tab-a") is False
+
+
+def test_open_console_opens_a_new_untracked_terminal_each_call(tmp_path):
+    fake = FakeTerminals()
+    service = TerminalService(fake)
+
+    assert service.open_console(tmp_path) == TerminalId("1")
+    assert service.open_console(tmp_path) == TerminalId("2")
+
+    assert fake.opened == [tmp_path, tmp_path]
+    assert service.open("tab-a", tmp_path) is True  # keyed terminals are unaffected
+
+
+def test_open_console_rejects_missing_folder(tmp_path):
+    fake = FakeTerminals()
+
+    with pytest.raises(TerminalError, match=FOLDER_MISSING_MESSAGE):
+        TerminalService(fake).open_console(tmp_path / "missing")
+    assert fake.opened == []

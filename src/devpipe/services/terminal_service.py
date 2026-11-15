@@ -52,6 +52,15 @@ class TerminalService:
         self._by_key[key] = self._terminals.open(cwd)
         return True
 
+    def open_console(self, cwd: Path) -> TerminalId:
+        """Open a new terminal in `cwd` that no key owns (every call opens another
+        window; the service does not track it) and return its id.
+        Raises TerminalError when `cwd` is not an existing folder or the terminal
+        cannot be opened."""
+        if not cwd.is_dir():
+            raise TerminalError(FOLDER_MISSING_MESSAGE)
+        return self._terminals.open(cwd)
+
     def send(self, key: str, text: str, enter: bool = True) -> None:
         """Type `text` (then Enter when `enter`) into the terminal of `key`.
         Raises TerminalError when `key` has no open terminal or the write fails."""

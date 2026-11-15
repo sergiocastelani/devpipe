@@ -8,6 +8,7 @@ from devpipe.models.tab_state import TabState
 from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
+from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
 
 
@@ -20,7 +21,9 @@ class IdentityTab(PipelineTab):
     """PipelineTab whose identity the test can change."""
 
     def __init__(self, tab_states, worktrees) -> None:
-        super().__init__(tab_states, worktrees, SkillsService(SkillsFiles(), Path("ai-skills")))
+        super().__init__(
+            tab_states, worktrees, SkillsService(SkillsFiles(), Path("ai-skills")), TerminalService(None)
+        )
         self.title_text = "t1"
         self.tooltip_text = "p1"
 

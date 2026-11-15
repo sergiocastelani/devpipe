@@ -9,12 +9,14 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from devpipe.infrastructure.git_worktrees import SubprocessGitWorktrees
+from devpipe.infrastructure.windows_terminals import WindowsTerminals
 from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.persistence.tab_state_repository import TabStateRepository
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
+from devpipe.services.terminal_service import TerminalService
 from devpipe.services.window_state_service import WindowStateService
 from devpipe.services.worktree_service import WorktreeService
 from devpipe.views.main_window import MainWindow
@@ -35,6 +37,7 @@ def main() -> int:
         SessionService(config),
         WorktreeService(SubprocessGitWorktrees()),
         SkillsService(SkillsFiles(), SKILLS_FOLDER),
+        TerminalService(WindowsTerminals()),
     )
     window.show_initial()
     return app.exec()
