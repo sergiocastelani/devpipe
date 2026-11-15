@@ -4,13 +4,14 @@ Self-contained: give it a TerminalService and a folder source, a callable asked
 for the folder only when the button is clicked. It has no label, only a console
 icon. A click brings the console already opened in that folder to the
 foreground, or opens a new one when there is none, and emits console_opened
-with its TerminalId.
+with its TerminalId. Its tooltip names the folder, asked for when the tooltip
+is shown.
 """
 
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QMessageBox, QToolButton, QWidget
 
@@ -18,6 +19,7 @@ from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.services.terminal_service import TerminalService
 
 OPEN_CONSOLE_TOOLTIP = "Open console on working folder"
+"""Tooltip while there is no folder; also the accessible name."""
 OPEN_CONSOLE_ERROR_TITLE = "Cannot open console"
 NO_FOLDER_TEXT = "There is no working folder to open a console in."
 BUTTON_SIZE = 64
@@ -70,6 +72,17 @@ class OpenConsoleButton(QToolButton):
         self.setToolTip(OPEN_CONSOLE_TOOLTIP)
         self.setAccessibleName(OPEN_CONSOLE_TOOLTIP)
         self.clicked.connect(lambda: self.open_console())  # drop the `checked` argument
+
+    def tooltip_text(self) -> str:
+        """"Open terminal at '<folder>'" for the folder source's current folder."""
+        folder = self._folder_source()
+        return OPEN_CONSOLE_TOOLTIP if folder is None else f"Open terminal at '{folder}'"
+
+    def event(self, event: QEvent) -> bool:
+        # The folder can change at any time, so the tooltip is built when it is shown.
+        if event.type() == QEvent.Type.ToolTip:
+            self.setToolTip(self.tooltip_text())
+        return super().event(event)
 
     def open_console(self) -> TerminalId | None:
         """Ask the folder source for the folder and show a console there: the one

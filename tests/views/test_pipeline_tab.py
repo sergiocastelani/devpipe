@@ -7,18 +7,21 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
+from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
 
 EXPECTED_FILE = {"version": 3, "feature_name": "x", "active_panel": "start", "worktrees": [], "create_prompt": ""}
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
+UNUSED_CONTROL_FILES = ControlFilesService(ControlFiles())  # no feature spec in these tests
 UNUSED_TERMINALS = TerminalService(None)  # never opens a console in these tests
 
 
 def make_tab(qtbot, tab_states, worktree_service):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS, UNUSED_CONTROL_FILES)
     qtbot.addWidget(tab)
     return tab
 

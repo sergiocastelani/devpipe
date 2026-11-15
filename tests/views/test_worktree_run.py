@@ -9,7 +9,9 @@ from PySide6.QtWidgets import QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.worktree import GitWorktreeError, WorktreeRequest, WorktreeResult
+from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
@@ -19,6 +21,7 @@ RUN_TIMEOUT_MS = 5000
 FEATURE = "feat-x"
 FOLDER = f"worktree-{FEATURE}"
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
+UNUSED_CONTROL_FILES = ControlFilesService(ControlFiles())  # no feature spec in these tests
 UNUSED_TERMINALS = TerminalService(None)  # never opens a console in these tests
 
 
@@ -54,7 +57,7 @@ def read_json(path: Path) -> dict:
 
 
 def saved_tab(qtbot, tab_states, worktree_service, path, worktrees=()):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS, UNUSED_CONTROL_FILES)
     qtbot.addWidget(tab)
     tab.apply_saved(path, TabState(FEATURE, Panel.START, list(worktrees)))
     tab.open_new_worktree_panel()
@@ -347,7 +350,7 @@ def test_create_ignored_while_run_in_progress(
 
 
 def test_create_on_unsaved_tab_is_ignored(qtbot, tmp_path, tab_states, worktree_service, fake_git):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS, UNUSED_CONTROL_FILES)
     qtbot.addWidget(tab)
     tab.open_new_worktree_panel()
     src = tmp_path / "src0"
