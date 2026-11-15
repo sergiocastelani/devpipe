@@ -48,6 +48,8 @@ class PipelineTab(QWidget):
         # The tab's worktree folders; every state file write carries it. Other code
         # may replace or append to it, and the next write persists it.
         self._worktrees: list[Path] = []
+        # The '/devpipe-create' prompt; every state file write carries it.
+        self._create_prompt = ""
         # Runtime info for this app session only; never written to the state file.
         self.session = TabSession()
 
@@ -76,6 +78,7 @@ class PipelineTab(QWidget):
         self.start_panel.start_pipeline_requested.connect(lambda: self.show_panel(Panel.DEVPIPE_CREATE))
         self.new_worktree_panel.create_requested.connect(self._start_run)
         self.devpipe_create_panel.console_opened.connect(self._remember_console)
+        self.devpipe_create_panel.prompt_changed.connect(self._set_create_prompt)
 
     @property
     def run_in_progress(self) -> bool:
@@ -142,6 +145,7 @@ class PipelineTab(QWidget):
         self._state_path = path
         self._feature_name = state.feature_name
         self._worktrees = list(state.worktrees)
+        self._create_prompt = state.create_prompt
         self.start_panel.show_saved(state.feature_name)
         self._show_worktrees()
         self._display(state.active_panel)
@@ -152,7 +156,7 @@ class PipelineTab(QWidget):
 
         Returns False (tab unchanged, warning shown) when the write fails.
         """
-        state = TabState(feature_name, self._persisted_panel(), list(self._worktrees))
+        state = TabState(feature_name, self._persisted_panel(), list(self._worktrees), self._create_prompt)
         if not self._write(path, state):
             return False
         self.apply_saved(path, state)
@@ -205,12 +209,27 @@ class PipelineTab(QWidget):
     def _remember_console(self, terminal: TerminalId) -> None:
         self.session.last_console = terminal
 
+    def _set_create_prompt(self, prompt: str) -> None:
+        """Keep the edited prompt and, when saved, rewrite the state file (no write when unchanged).
+
+        A failed write shows a warning; the prompt is kept and the next write persists it.
+        """
+        if prompt == self._create_prompt:
+            return
+        self._create_prompt = prompt
+        if self._state_path is not None:
+            self._write(self._state_path, self._current_state())
+
     def _display(self, panel: Panel) -> None:
-        self.stack.setCurrentWidget(self._panels[panel])
+        widget = self._panels[panel]
+        if widget is self.devpipe_create_panel and self.stack.currentWidget() is not widget:
+            # Coming from another panel (no edit can be pending): show the kept prompt.
+            self.devpipe_create_panel.show_prompt(self._feature_name or "", self._create_prompt)
+        self.stack.setCurrentWidget(widget)
         self._active_panel = panel
 
     def _current_state(self) -> TabState:
-        return TabState(self._feature_name, self._persisted_panel(), list(self._worktrees))
+        return TabState(self._feature_name, self._persisted_panel(), list(self._worktrees), self._create_prompt)
 
     def _persisted_panel(self) -> Panel:
         """The panel to write as active_panel: the shown one, or START when it is not persisted."""

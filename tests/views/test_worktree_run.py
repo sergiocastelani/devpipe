@@ -85,10 +85,11 @@ def run(qtbot, tab, writes):
 
 def expected_file(*targets):
     return {
-        "version": 2,
+        "version": 3,
         "feature_name": FEATURE,
         "active_panel": "start",
         "worktrees": [str(t) for t in targets],
+        "create_prompt": "",
     }
 
 

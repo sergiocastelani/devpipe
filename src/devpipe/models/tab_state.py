@@ -5,8 +5,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STATE_FILE_VERSION = 2
-"""The tab state file format version this app writes (it also reads version 1)."""
+STATE_FILE_VERSION = 3
+"""The tab state file format version this app writes (it also reads versions 1 and 2)."""
 
 _FEATURE_NAME_PATTERN = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
@@ -32,6 +32,8 @@ class TabState:
     active_panel: Panel = Panel.START
     worktrees: list[Path] = field(default_factory=list)
     """Worktree folders of the tab, in saved order (absolute when created by the app)."""
+    create_prompt: str = ""
+    """The prompt the user wrote for '/devpipe-create <feature-name>'."""
 
 
 def is_valid_feature_name(name: str) -> bool:

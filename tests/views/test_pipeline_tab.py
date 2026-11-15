@@ -12,7 +12,7 @@ from devpipe.services.skills_service import SkillsService
 from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
 
-EXPECTED_FILE = {"version": 2, "feature_name": "x", "active_panel": "start", "worktrees": []}
+EXPECTED_FILE = {"version": 3, "feature_name": "x", "active_panel": "start", "worktrees": [], "create_prompt": ""}
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
 UNUSED_TERMINALS = TerminalService(None)  # never opens a console in these tests
 

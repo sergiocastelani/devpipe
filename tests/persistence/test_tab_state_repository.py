@@ -6,7 +6,14 @@ import pytest
 from devpipe.models.tab_state import Panel, TabState, TabStateError
 from devpipe.persistence.tab_state_repository import TabStateRepository
 
-_VALID = {"version": 2, "feature_name": "new-feature", "active_panel": "start", "worktrees": []}
+_VALID = {
+    "version": 3,
+    "feature_name": "new-feature",
+    "active_panel": "start",
+    "worktrees": [],
+    "create_prompt": "",
+}
+_V2_VALID = {"version": 2, "feature_name": "new-feature", "active_panel": "start", "worktrees": []}
 _V1_VALID = {"version": 1, "feature_name": "new-feature", "active_panel": "start"}
 _VALID_BYTES = (json.dumps(_VALID, indent=2) + "\n").encode("utf-8")
 
@@ -31,11 +38,15 @@ _INVALID_FILES = [
     ("number", b"5", "not a JSON object", False),
     ("null", b"null", "not a JSON object", False),
     ("missing-version", _without("version"), "missing version", False),
-    ("version-3", _with("version", 3), "unsupported version: ", True),
+    ("missing-create-prompt", _without("create_prompt"), "invalid create_prompt", False),
+    ("create-prompt-null", _with("create_prompt", None), "invalid create_prompt", False),
+    ("create-prompt-number", _with("create_prompt", 1), "invalid create_prompt", False),
+    ("create-prompt-list", _with("create_prompt", ["x"]), "invalid create_prompt", False),
+    ("version-4", _with("version", 4), "unsupported version: ", True),
     ("version-0", _with("version", 0), "unsupported version: ", True),
-    ("version-str", _with("version", "2"), "unsupported version: ", True),
+    ("version-str", _with("version", "3"), "unsupported version: ", True),
     ("version-true", _with("version", True), "unsupported version: ", True),
-    ("version-float", _with("version", 2.0), "unsupported version: ", True),
+    ("version-float", _with("version", 3.0), "unsupported version: ", True),
     ("version-null", _with("version", None), "unsupported version: ", True),
     ("missing-feature-name", _without("feature_name"), "missing feature_name", False),
     ("feature-name-empty", _with("feature_name", ""), "empty feature_name", False),
@@ -93,16 +104,17 @@ def test_save_writes_exact_format(tmp_path):
     path = tmp_path / "s.json"
     a = tmp_path / "wt" / "a"
     b = tmp_path / "wt" / "b"
-    TabStateRepository().save(path, TabState("new-feature", Panel.START, [a, b]))
+    TabStateRepository().save(path, TabState("new-feature", Panel.START, [a, b], "line 1\nline 2"))
     text = path.read_text(encoding="utf-8")
     expected = {
-        "version": 2,
+        "version": 3,
         "feature_name": "new-feature",
         "active_panel": "start",
         "worktrees": [str(a), str(b)],
+        "create_prompt": "line 1\nline 2",
     }
     assert json.loads(text) == expected
-    assert list(json.loads(text)) == ["version", "feature_name", "active_panel", "worktrees"]
+    assert list(json.loads(text)) == ["version", "feature_name", "active_panel", "worktrees", "create_prompt"]
     assert text.endswith("\n")
     assert text == json.dumps(expected, indent=2) + "\n"
 
@@ -116,7 +128,8 @@ def test_save_writes_empty_worktrees(tmp_path):
 def test_save_then_load_round_trips(tmp_path):
     path = tmp_path / "s.json"
     repo = TabStateRepository()
-    state = TabState("nova-feature-x", Panel.START, [tmp_path / "wt" / "b", tmp_path / "wt" / "a"])
+    worktrees = [tmp_path / "wt" / "b", tmp_path / "wt" / "a"]
+    state = TabState("nova-feature-x", Panel.START, worktrees, 'é "x"\n')
     repo.save(path, state)
     assert repo.load(path) == state
 
@@ -130,9 +143,10 @@ def test_devpipe_create_panel_round_trips(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))["active_panel"] == "devpipe-create"
     assert repo.load(path) == state
 
-def test_v2_file_load_then_save_is_identical(tmp_path):
+def test_v3_file_load_then_save_is_identical(tmp_path):
     path = tmp_path / "s.json"
-    content = json.dumps({**_VALID, "worktrees": [str(tmp_path / "wt" / "x")]}, indent=2) + "\n"
+    data = {**_VALID, "worktrees": [str(tmp_path / "wt" / "x")], "create_prompt": "do it"}
+    content = json.dumps(data, indent=2) + "\n"
     path.write_text(content, encoding="utf-8")  # text mode, as the repository writes
     before = path.read_bytes()
     repo = TabStateRepository()
@@ -142,6 +156,28 @@ def test_v2_file_load_then_save_is_identical(tmp_path):
 
 def _write_json(path, data):
     path.write_bytes(json.dumps(data).encode("utf-8"))
+
+
+def test_load_v2_file_has_empty_create_prompt(tmp_path):
+    path = tmp_path / "s.json"
+    a = str(tmp_path / "wt" / "a")
+    _write_json(path, {**_V2_VALID, "worktrees": [a]})
+    assert TabStateRepository().load(path) == TabState("new-feature", Panel.START, [Path(a)], "")
+
+
+@pytest.mark.parametrize("value", ["x", 1, None], ids=["str", "int", "null"])
+def test_load_v2_ignores_create_prompt_key(tmp_path, value):
+    path = tmp_path / "s.json"
+    _write_json(path, {**_V2_VALID, "create_prompt": value})
+    assert TabStateRepository().load(path).create_prompt == ""
+
+
+def test_load_v2_then_save_writes_v3(tmp_path):
+    path = tmp_path / "s.json"
+    _write_json(path, _V2_VALID)
+    repo = TabStateRepository()
+    repo.save(path, repo.load(path))
+    assert json.loads(path.read_text(encoding="utf-8")) == _VALID
 
 
 def test_load_v1_file_has_no_worktrees(tmp_path):
@@ -157,7 +193,7 @@ def test_load_v1_ignores_worktrees_key(tmp_path, value):
     assert TabStateRepository().load(path).worktrees == []
 
 
-def test_load_v1_then_save_writes_v2(tmp_path):
+def test_load_v1_then_save_writes_v3(tmp_path):
     path = tmp_path / "s.json"
     _write_json(path, _V1_VALID)
     repo = TabStateRepository()

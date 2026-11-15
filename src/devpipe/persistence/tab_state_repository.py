@@ -16,8 +16,10 @@ _VERSION_KEY = "version"
 _FEATURE_NAME_KEY = "feature_name"
 _ACTIVE_PANEL_KEY = "active_panel"
 _WORKTREES_KEY = "worktrees"
+_CREATE_PROMPT_KEY = "create_prompt"
 _V1 = 1  # the format without `worktrees`
-_READABLE_VERSIONS = frozenset({_V1, STATE_FILE_VERSION})
+_V2 = 2  # the format without `create_prompt`
+_READABLE_VERSIONS = frozenset({_V1, _V2, STATE_FILE_VERSION})
 _PANEL_VALUES = frozenset(panel.value for panel in PERSISTED_PANELS)
 _INVALID_WORKTREES = "invalid worktrees"
 
@@ -32,7 +34,7 @@ class TabStateRepository:
         return self._parse(path, self._read_json(path))
 
     def save(self, path: Path, state: TabState) -> None:
-        """Write the file (overwrites) in the current format (version 2).
+        """Write the file (overwrites) in the current format (version 3).
 
         Raises TabStateError (only) for a well-typed `state`; a wrongly typed `state`
         or an `active_panel` outside PERSISTED_PANELS is a programming error:
@@ -47,6 +49,7 @@ class TabStateRepository:
             _FEATURE_NAME_KEY: state.feature_name,
             _ACTIVE_PANEL_KEY: state.active_panel.value,
             _WORKTREES_KEY: [str(worktree) for worktree in state.worktrees],
+            _CREATE_PROMPT_KEY: state.create_prompt,
         }
         try:
             path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -100,7 +103,13 @@ class TabStateRepository:
 
         worktrees = self._parse_worktrees(path, data) if version != _V1 else []
 
-        return TabState(feature_name, Panel(active_panel), worktrees)
+        create_prompt = ""
+        if version == STATE_FILE_VERSION:
+            create_prompt = data.get(_CREATE_PROMPT_KEY)
+            if not isinstance(create_prompt, str):
+                raise TabStateError(path, "invalid create_prompt")
+
+        return TabState(feature_name, Panel(active_panel), worktrees, create_prompt)
 
     def _parse_worktrees(self, path: Path, data: dict) -> list[Path]:
         """The v2 `worktrees` list as Paths. Raises TabStateError(path, "invalid worktrees")

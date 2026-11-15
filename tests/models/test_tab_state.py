@@ -40,8 +40,8 @@ def test_tab_state_worktrees_default_is_not_shared():
     assert second.worktrees == []
 
 
-def test_state_file_version_is_2():
-    assert STATE_FILE_VERSION == 2
+def test_state_file_version_is_3():
+    assert STATE_FILE_VERSION == 3
 
 
 @pytest.mark.parametrize("name", ["a", "new-feature", "nova-feature-x", "a1-2b"])
