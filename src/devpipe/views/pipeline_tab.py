@@ -58,7 +58,12 @@ class PipelineTab(QWidget):
         self.stack.addWidget(self.start_panel)
         self.new_worktree_panel = NewWorktreePanel()
         self.stack.addWidget(self.new_worktree_panel)
-        self.devpipe_create_panel = DevpipeCreatePanel(terminals, lambda: self._worktrees)
+        self.devpipe_create_panel = DevpipeCreatePanel(
+            terminals,
+            lambda: self._worktrees,
+            lambda: self._feature_name or "",
+            lambda: self._create_prompt,
+        )
         self.stack.addWidget(self.devpipe_create_panel)
         self.stack.setCurrentWidget(self.start_panel)
         # The single map from panel id to panel widget.
@@ -222,9 +227,6 @@ class PipelineTab(QWidget):
 
     def _display(self, panel: Panel) -> None:
         widget = self._panels[panel]
-        if widget is self.devpipe_create_panel and self.stack.currentWidget() is not widget:
-            # Coming from another panel (no edit can be pending): show the kept prompt.
-            self.devpipe_create_panel.show_prompt(self._feature_name or "", self._create_prompt)
         self.stack.setCurrentWidget(widget)
         self._active_panel = panel
 

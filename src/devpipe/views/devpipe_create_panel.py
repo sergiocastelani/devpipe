@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QHideEvent, QResizeEvent
+from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout, QWidget
 
 from devpipe.services.terminal_service import TerminalService
@@ -23,11 +23,22 @@ class DevpipeCreatePanel(QWidget):
     # (or at once when the panel is hidden with an edit still pending).
     prompt_changed = Signal(str)
 
-    def __init__(self, terminals: TerminalService, worktrees: Callable[[], list[Path]]) -> None:
+    def __init__(
+        self,
+        terminals: TerminalService,
+        worktrees: Callable[[], list[Path]],
+        feature_name: Callable[[], str],
+        saved_prompt: Callable[[], str],
+    ) -> None:
         """`worktrees` returns the tab's current worktree list; it is read only when
-        a console is opened, which starts in the first entry."""
+        a console is opened, which starts in the first entry.
+
+        `feature_name` and `saved_prompt` return the tab's feature name and its kept
+        prompt; they are read each time the panel is shown."""
         super().__init__()
         self._worktrees = worktrees
+        self._feature_name = feature_name
+        self._saved_prompt = saved_prompt
         self.open_console_button = OpenConsoleButton(terminals, self._console_folder)
         self.open_console_button.console_opened.connect(self.console_opened)
 
@@ -53,14 +64,18 @@ class DevpipeCreatePanel(QWidget):
         layout.addWidget(self.prompt_label)
         layout.addWidget(self.prompt_input, stretch=1)  # capped at half the panel in resizeEvent
         layout.addStretch()
-        self.show_prompt("", "")
+        self._load_saved_prompt()
 
-    def show_prompt(self, feature_name: str, prompt: str) -> None:
-        """Show the prompt label for `feature_name` and put `prompt` in the text box,
-        dropping any pending edit and without reporting a change."""
+    def _load_saved_prompt(self) -> None:
+        """Show the label for the tab's feature name and put the tab's kept prompt in
+        the text box, dropping any pending edit and without reporting a change. The
+        text box is left alone when it already holds that prompt (keeps the cursor)."""
         self._save_timer.stop()
-        self._label_text = f"Prompt for '/devpipe-create {feature_name}':"
+        self._label_text = f"Prompt for '/devpipe-create {self._feature_name()}':"
         self._show_pending(False)
+        prompt = self._saved_prompt()
+        if self.prompt_input.toPlainText() == prompt:
+            return
         self.prompt_input.blockSignals(True)
         try:
             self.prompt_input.setPlainText(prompt)
@@ -83,6 +98,13 @@ class DevpipeCreatePanel(QWidget):
 
     def _show_pending(self, pending: bool) -> None:
         self.prompt_label.setText(self._label_text + (PENDING_MARK if pending else ""))
+
+    def showEvent(self, event: QShowEvent) -> None:
+        # Panel switch or tab switch (not a window restore): show the tab's kept prompt.
+        # No edit can be pending here; hideEvent reported it.
+        if not event.spontaneous():
+            self._load_saved_prompt()
+        super().showEvent(event)
 
     def hideEvent(self, event: QHideEvent) -> None:
         # Panel switch, tab close or window close: do not lose the last edit.

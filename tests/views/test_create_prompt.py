@@ -53,6 +53,7 @@ def warnings(monkeypatch):
 def make_tab(qtbot, store, worktree_service):
     tab = PipelineTab(TabStateService(store), worktree_service, UNUSED_SKILLS, UNUSED_TERMINALS)
     qtbot.addWidget(tab)
+    tab.show()  # the panel reads the kept prompt on show; show and hide events only reach visible widgets
     return tab
 
 
@@ -102,7 +103,6 @@ def test_unchanged_prompt_is_not_written(qtbot, store, worktree_service, tmp_pat
 
 def test_leaving_the_panel_saves_a_pending_edit(qtbot, store, worktree_service, tmp_path):
     tab = make_tab(qtbot, store, worktree_service)
-    tab.show()  # hide events only reach visible widgets
     path = tmp_path / "x.json"
     open_create_panel(tab, path)
     tab.devpipe_create_panel.prompt_input.setPlainText("typed")  # default delay: still pending
@@ -118,7 +118,7 @@ def test_showing_the_panel_shows_the_saved_prompt(qtbot, store, worktree_service
     open_create_panel(tab, path, "saved prompt")
     panel = tab.devpipe_create_panel
     assert panel.prompt_input.toPlainText() == "saved prompt"
-    assert panel.prompt_label.text() == "'/devpipe-create x' prompt:"
+    assert panel.prompt_label.text() == "Prompt for '/devpipe-create x':"
 
 
 def test_showing_the_panel_does_not_save(qtbot, store, worktree_service, tmp_path, short_delay):
