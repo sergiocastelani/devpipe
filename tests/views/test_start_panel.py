@@ -1,19 +1,13 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QSize, Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
-from devpipe.views.start_panel import (
-    BIG_BUTTON_MIN_HEIGHT,
-    BIG_BUTTON_MIN_WIDTH,
-    BIG_BUTTON_POINT_SIZE,
-    BIG_BUTTON_SPACING,
-    StartPanel,
-)
+from devpipe.views.start_panel import StartPanel
 
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
@@ -54,16 +48,6 @@ def opened_urls(monkeypatch):
 
     monkeypatch.setattr(QDesktopServices, "openUrl", fake)
     return opened
-
-
-def big_button_column(panel) -> QVBoxLayout:
-    """The child layout of the panel's root layout that holds new_worktree_button."""
-    root = panel.layout()
-    for index in range(root.count()):
-        column = root.itemAt(index).layout()
-        if column is not None and column.indexOf(panel.new_worktree_button) >= 0:
-            return column
-    pytest.fail("no child layout holds new_worktree_button")
 
 
 def item_texts(panel):
@@ -149,17 +133,6 @@ def test_saved_mode_keeps_save_disabled(qtbot):
     assert panel.new_worktree_button.isEnabled()
 
 
-def test_new_worktree_button_matches_install_skills_button_format(qtbot):
-    panel = make_panel(qtbot)
-    expected_size = QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
-    assert panel.new_worktree_button.minimumSize() == panel.install_skills_button.minimumSize() == expected_size
-    assert (
-        panel.new_worktree_button.font().pointSize()
-        == panel.install_skills_button.font().pointSize()
-        == BIG_BUTTON_POINT_SIZE
-    )
-
-
 def test_new_worktree_click_emits_signal(qtbot):
     panel = make_panel(qtbot)
     panel.show_saved("x")
@@ -168,13 +141,9 @@ def test_new_worktree_click_emits_signal(qtbot):
     assert blocker.args == []
 
 
-def test_install_skills_button_is_big_and_enabled_before_save(qtbot):
+def test_install_skills_button_is_enabled_before_save(qtbot):
     panel = make_panel(qtbot)
-    button = panel.install_skills_button
-    assert button.text() == "Install/Update skills"
-    assert button.isEnabled()
-    assert button.minimumSize() == QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
-    assert button.font().pointSize() == BIG_BUTTON_POINT_SIZE
+    assert panel.install_skills_button.isEnabled()
 
 
 def test_disabled_new_worktree_button_emits_nothing(qtbot):
@@ -225,16 +194,6 @@ def test_show_worktrees_does_not_keep_caller_list(qtbot, tmp_path):
     paths.append(tmp_path / "b")
     assert panel.worktrees_list.count() == 1
     assert paths == [tmp_path / "a", tmp_path / "b"]
-
-
-def test_worktrees_are_below_the_big_buttons(qtbot):
-    panel = make_panel(qtbot)
-    layout = panel.layout()
-    header = layout.itemAt(layout.count() - 2).layout()
-    assert header is not None
-    assert header.indexOf(panel.worktrees_label) == 0
-    assert header.indexOf(panel.remove_worktree_button) == 1
-    assert layout.indexOf(panel.worktrees_list) == layout.count() - 1
 
 
 def test_remove_button_hidden_with_the_list(qtbot, tmp_path):
@@ -314,13 +273,9 @@ def test_double_click_file_is_not_a_folder(qtbot, tmp_path, opened_urls, warning
     assert opened_urls == []
 
 
-def test_start_pipeline_button_is_big_and_disabled_before_save(qtbot):
+def test_start_pipeline_button_is_disabled_before_save(qtbot):
     panel = make_panel(qtbot)
-    button = panel.start_pipeline_button
-    assert button.text() == "Start Pipeline"
-    assert not button.isEnabled()
-    assert button.minimumSize() == QSize(BIG_BUTTON_MIN_WIDTH, BIG_BUTTON_MIN_HEIGHT)
-    assert button.font().pointSize() == BIG_BUTTON_POINT_SIZE
+    assert not panel.start_pipeline_button.isEnabled()
 
 
 def answer_folder(monkeypatch, answer: str) -> list:

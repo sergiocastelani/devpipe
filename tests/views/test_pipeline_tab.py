@@ -4,15 +4,13 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QStackedWidget
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
-from devpipe.views.new_worktree_panel import NewWorktreePanel
 from devpipe.services.terminal_service import TerminalService
 from devpipe.views.pipeline_tab import PipelineTab
-from devpipe.views.start_panel import StartPanel
 
 EXPECTED_FILE = {"version": 2, "feature_name": "x", "active_panel": "start", "worktrees": []}
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
@@ -42,17 +40,10 @@ def read_json(path):
     return json.loads(path.read_text("utf-8"))
 
 
-def test_tab_shows_start_panel_in_a_stack(qtbot, tab_states, worktree_service):
+def test_new_tab_starts_on_start_panel(qtbot, tab_states, worktree_service):
     tab = make_tab(qtbot, tab_states, worktree_service)
-    assert isinstance(tab.stack, QStackedWidget)
-    assert tab.stack.count() == 3
-    assert tab.stack.widget(0) is tab.start_panel
-    assert tab.stack.widget(1) is tab.new_worktree_panel
-    assert isinstance(tab.new_worktree_panel, NewWorktreePanel)
-    assert tab.stack.widget(2) is tab.devpipe_create_panel
     assert tab.stack.currentWidget() is tab.start_panel
     assert tab.active_panel is Panel.START
-    assert isinstance(tab.start_panel, StartPanel)
 
 
 def test_new_tab_identity(qtbot, tab_states, worktree_service):

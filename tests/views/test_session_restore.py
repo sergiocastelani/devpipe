@@ -302,10 +302,6 @@ def test_close_tab_with_invalid_index_writes_nothing(make_window, files, tmp_pat
     assert (tmp_path / "config.json").read_text(encoding="utf-8") == before
 
 
-def test_tabs_are_movable(make_window):
-    assert make_window().tabs.isMovable()
-
-
 def test_reorder_updates_session(make_window, files, tmp_path):
     a, b = files
     window = make_window()

@@ -8,7 +8,7 @@ from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.services.skills_service import SkillsService
-from devpipe.views.open_console_button import OPEN_CONSOLE_TOOLTIP, OpenConsoleButton
+from devpipe.views.open_console_button import OpenConsoleButton
 from devpipe.views.pipeline_tab import PipelineTab
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
@@ -27,15 +27,6 @@ def make_button(qtbot, terminal_service, folder=None):
     button = OpenConsoleButton(terminal_service, lambda: folder)
     qtbot.addWidget(button)
     return button
-
-
-def test_button_has_icon_tooltip_and_fixed_size_without_label(qtbot, terminal_service):
-    button = make_button(qtbot, terminal_service)
-    assert button.text() == ""
-    assert not button.icon().isNull()
-    assert button.toolTip() == OPEN_CONSOLE_TOOLTIP
-    assert (button.minimumSize().width(), button.minimumSize().height()) == (64, 64)
-    assert (button.maximumSize().width(), button.maximumSize().height()) == (64, 64)
 
 
 def test_no_folder_warns_and_opens_nothing(qtbot, terminal_service, fake_terminals, warnings):

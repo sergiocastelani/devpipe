@@ -48,15 +48,6 @@ def test_main_window_opens_with_one_new_pipeline_tab(window):
     assert window.tabs.currentIndex() == 0
 
 
-def test_tabs_are_closable(window):
-    assert window.tabs.tabsClosable()
-
-
-def test_plus_button_is_the_tab_corner_widget(window):
-    assert window.tabs.cornerWidget(Qt.Corner.TopRightCorner) is window.new_tab_button
-    assert window.new_tab_button.text() == "+"
-
-
 def test_plus_button_adds_and_selects_a_new_tab(qtbot, window):
     first = window.tabs.widget(0)
     qtbot.mouseClick(window.new_tab_button, Qt.MouseButton.LeftButton)

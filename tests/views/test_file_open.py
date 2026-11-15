@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
@@ -56,19 +55,6 @@ def warnings(monkeypatch):
 
     monkeypatch.setattr(QMessageBox, "warning", fake)
     return shown
-
-
-def test_file_menu_holds_open_action(make_window):
-    window = make_window()
-    file_action = window.menuBar().actions()[0]
-    assert file_action.text() == "&File"
-    assert window.open_action in file_action.menu().actions()
-    assert window.open_action.text() == "&Open..."
-
-
-def test_open_action_shortcut_is_ctrl_o(make_window):
-    window = make_window()
-    assert window.open_action.shortcut() == QKeySequence("Ctrl+O")
 
 
 def test_open_dialog_uses_home_and_json_filter(make_window, open_dialog, warnings):

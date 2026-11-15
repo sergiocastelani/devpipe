@@ -2,8 +2,6 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QScrollArea
-
 from devpipe.models.worktree import WorktreeResult
 from devpipe.views.new_worktree_panel import (
     FAILURE_BORDER_COLOR,
@@ -75,19 +73,8 @@ def test_fresh_panel_has_hidden_error_box_and_progress(qtbot):
     assert panel.error_box.toPlainText() == ""
     assert panel.progress_bar.isHidden()
     assert panel.progress_bar.minimum() == panel.progress_bar.maximum() == 0
-    assert panel.error_box.accessibleName() == "Worktree errors"
-    assert panel.progress_bar.accessibleName() == "Creating worktrees"
     assert_plain(panel.groups()[0])
     assert panel.create_button.text() == "Create"
-
-
-def test_layout_order_add_error_progress_create(qtbot):
-    panel = make_panel(qtbot)
-    layout = panel.layout()
-    widgets = [layout.itemAt(i).widget() for i in range(layout.count())]
-    assert len(widgets) == 5
-    assert isinstance(widgets[0], QScrollArea)
-    assert widgets[1:] == [panel.add_button, panel.error_box, panel.progress_bar, panel.create_button]
 
 
 def test_set_busy_disables_panel_and_shows_progress(qtbot):

@@ -27,4 +27,7 @@ code.
 - Package and env management: uv (`pyproject.toml`).
 - Layout: code in `src/devpipe/`, tests in `tests/` (pytest).
 - Run: `uv run devpipe`. Test: `uv run pytest`.
+- Read `docs/tests.md` before writing tests. It defines what each layer
+  tests and limits GUI tests to behavior and state changes (no layout or
+  look tests).
 - Main platform: Windows. Use `pathlib`, never hard-coded path separators.

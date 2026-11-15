@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QGroupBox, QLabel, QPushButton, QScrollArea, QToolButton
+from PySide6.QtWidgets import QFileDialog
 
 from devpipe.models.worktree import WorktreeRequest
 from devpipe.views.new_worktree_panel import NewWorktreePanel
@@ -62,31 +62,6 @@ def test_fresh_panel_has_one_empty_group(qtbot):
     assert group.remove_button.isHidden()
     assert not panel.create_button.isEnabled()
     assert panel.create_button.text() == "Create"
-
-
-def test_group_rows_have_labels_inputs_and_pickers(qtbot):
-    panel = make_panel(qtbot)
-    group = panel.groups()[0]
-    assert isinstance(group, QGroupBox)
-    labels = {label.text(): label for label in group.findChildren(QLabel)}
-    assert labels["Source project folder"].buddy() is group.source_input
-    assert labels["Worktree parent folder"].buddy() is group.parent_input
-    assert isinstance(group.source_picker, QToolButton)
-    assert isinstance(group.parent_picker, QToolButton)
-
-
-def test_accessible_names_and_tooltips(qtbot):
-    panel = make_panel(qtbot)
-    group = panel.groups()[0]
-    expected = [
-        (group.source_picker, "Choose source project folder"),
-        (group.parent_picker, "Choose worktree parent folder"),
-        (panel.add_button, "Add worktree"),
-        (group.remove_button, "Remove worktree"),
-    ]
-    for widget, text in expected:
-        assert widget.toolTip() == text
-        assert widget.accessibleName() == text
 
 
 def test_add_appends_removable_group(qtbot):
@@ -163,14 +138,6 @@ def test_reset_with_feature_name_prefills_folder_name_of_each_group(qtbot):
     fill(second, folder_name=" worktree-feat-x ")
     [args] = click_create(qtbot, panel)
     assert [request.folder_name for request in args] == ["custom", "worktree-feat-x"]
-
-
-def test_folder_name_label_is_buddy_of_its_input(qtbot):
-    panel = make_panel(qtbot)
-    group = panel.groups()[0]
-    labels = [label for label in group.findChildren(QLabel) if label.text() == "Worktree folder name"]
-    assert len(labels) == 1
-    assert labels[0].buddy() is group.folder_name_input
 
 
 @pytest.mark.parametrize("name", ["", "  ", ".", "..", "a/b", "a\\b", "a:b", "a*", "end.", "x\x01"])
@@ -360,24 +327,3 @@ def test_reset_returns_to_one_empty_unlocked_group(qtbot):
     assert not panel.create_button.isEnabled()
 
 
-def test_no_back_or_cancel_button(qtbot):
-    panel = make_panel(qtbot)
-    add_groups(qtbot, panel, 2)
-    buttons = panel.findChildren(QPushButton)
-    assert len(buttons) == 2
-    assert set(buttons) == {panel.add_button, panel.create_button}
-
-
-def test_layout_order_scroll_add_create(qtbot):
-    panel = make_panel(qtbot)
-    layout = panel.layout()
-    widgets = [layout.itemAt(i).widget() for i in range(layout.count())]
-    assert len(widgets) == 5
-    scroll, add, error_box, progress_bar, create = widgets
-    assert isinstance(scroll, QScrollArea)
-    assert add is panel.add_button
-    assert error_box is panel.error_box
-    assert progress_bar is panel.progress_bar
-    assert create is panel.create_button
-    for group in panel.groups():
-        assert scroll.widget().isAncestorOf(group)
