@@ -25,6 +25,7 @@ PENDING_MARK = " *"
 
 SEND_CREATE_PROMPT_TEXT = "Send 'create' prompt to terminal"
 SEND_PLAN_PROMPT_TEXT = "Send 'plan' prompt to terminal"
+SEND_STEPS_PROMPT_TEXT = "Send 'steps' prompt to terminal"
 SEND_PROMPT_ERROR_TITLE = "Cannot send prompt"
 TITLE_TEXT = "Create Feature Spec"
 
@@ -37,6 +38,11 @@ def create_command(feature_name: str, prompt: str) -> str:
 def plan_command(feature_name: str) -> str:
     """The text typed into the terminal by the 'plan' button."""
     return f"/devpipe-plan {feature_name}"
+
+
+def steps_command(feature_name: str) -> str:
+    """The text typed into the terminal by the 'steps' button."""
+    return f"/devpipe-steps {feature_name} \n Detail remaining steps"
 
 
 class DevpipeCreatePanel(QWidget):
@@ -57,7 +63,8 @@ class DevpipeCreatePanel(QWidget):
 
         `tab_terminal` returns the tab's terminal (None when it has none) and `stage`
         the tab's devpipe stage; the send buttons are enabled only while the terminal
-        is open and the stage is theirs (CREATE for 'create', PLAN for 'plan'), checked
+        is open and the stage is theirs (CREATE for 'create', PLAN for 'plan', STEPS for
+        'steps'), checked
         when the panel is shown and on update_send_button (the tab calls it after its
         console button opens one)."""
         super().__init__()
@@ -93,6 +100,8 @@ class DevpipeCreatePanel(QWidget):
         self.send_create_button.clicked.connect(lambda: self.send_create_prompt())  # drop the `checked` argument
         self.send_plan_button = QPushButton(SEND_PLAN_PROMPT_TEXT)
         self.send_plan_button.clicked.connect(lambda: self.send_plan_prompt())
+        self.send_steps_button = QPushButton(SEND_STEPS_PROMPT_TEXT)
+        self.send_steps_button.clicked.connect(lambda: self.send_steps_prompt())
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
@@ -100,6 +109,7 @@ class DevpipeCreatePanel(QWidget):
         layout.addWidget(self.prompt_input, stretch=1)  # capped at half the panel in resizeEvent
         layout.addWidget(self.send_create_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.send_plan_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.send_steps_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self._load_saved_prompt()
         self.update_send_button()
@@ -138,6 +148,10 @@ class DevpipeCreatePanel(QWidget):
         """Types the '/devpipe-plan <feature-name>' command into terminal."""
         self._send_to_terminal(plan_command(self._feature_name()))
 
+    def send_steps_prompt(self) -> None:
+        """Types the '/devpipe-steps <feature-name>' command and its prompt into terminal."""
+        self._send_to_terminal(steps_command(self._feature_name()))
+
     def _send_to_terminal(self, text: str) -> None:
         """Bring the tab's terminal to the foreground and type the text parameter
         into it, without pressing Enter at the end. Every
@@ -160,11 +174,12 @@ class DevpipeCreatePanel(QWidget):
 
     def update_send_button(self) -> None:
         """Enable a send button only while the tab's terminal is open and the tab is
-        at the button's stage: CREATE for 'create', PLAN for 'plan'."""
+        at the button's stage: CREATE for 'create', PLAN for 'plan', STEPS for 'steps'."""
         terminal_open = self._open_tab_terminal() is not None
         stage = self._stage() if terminal_open else None
         self.send_create_button.setEnabled(stage is DevpipeStage.CREATE)
         self.send_plan_button.setEnabled(stage is DevpipeStage.PLAN)
+        self.send_steps_button.setEnabled(stage is DevpipeStage.STEPS)
 
     def flush_prompt(self) -> None:
         """Report a pending edit now instead of waiting for the delay; no-op when none is pending."""

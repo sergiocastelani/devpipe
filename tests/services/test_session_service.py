@@ -10,11 +10,20 @@ from devpipe.services.window_state_service import WindowStateService
 
 
 class FakeControlFiles:
-    def __init__(self, existing: set[Path] | None = None) -> None:
+    def __init__(self, existing: set[Path] | None = None, texts: dict[Path, str] | None = None) -> None:
         self.existing = existing or set()
+        self.texts = texts or {}
 
     def file_exists(self, path: Path) -> bool:
-        return path in self.existing
+        return path in self.existing or path in self.texts
+
+    def read_text(self, path: Path) -> str | None:
+        return self.texts.get(path)
+
+
+def contract(*statuses: str) -> str:
+    rows = "".join(f"| S{n:02} | step {n} | {status} | - |\n" for n, status in enumerate(statuses, 1))
+    return "# Design Contract\n\n| Step | Title | Status | File |\n|------|-------|--------|------|\n" + rows
 
 
 def make_service(tmp_path, control_files=None):
@@ -107,20 +116,24 @@ def test_remember_folder_keeps_session(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("files", "stage"),
+    ("files", "contract_text", "stage"),
     [
-        (set(), DevpipeStage.CREATE),
-        ({"plan.md", "implementation-log.md"}, DevpipeStage.CREATE),
-        ({"feature-spec.md"}, DevpipeStage.PLAN),
-        ({"feature-spec.md", "implementation-log.md"}, DevpipeStage.PLAN),
-        ({"feature-spec.md", "plan.md"}, DevpipeStage.STEPS),
-        ({"feature-spec.md", "plan.md", "implementation-log.md"}, DevpipeStage.IMPLEMENTATION),
+        (set(), None, DevpipeStage.CREATE),
+        ({"plan.md"}, contract("approved"), DevpipeStage.CREATE),
+        ({"feature-spec.md"}, None, DevpipeStage.PLAN),
+        ({"feature-spec.md"}, contract("approved"), DevpipeStage.PLAN),
+        ({"feature-spec.md", "plan.md"}, None, DevpipeStage.STEPS),
+        ({"feature-spec.md", "plan.md"}, contract("approved", "draft"), DevpipeStage.STEPS),
+        ({"feature-spec.md", "plan.md"}, contract("approved", "pending"), DevpipeStage.STEPS),
+        ({"feature-spec.md", "plan.md"}, contract("approved", "approved"), DevpipeStage.IMPLEMENTATION),
+        ({"feature-spec.md", "plan.md"}, "", DevpipeStage.IMPLEMENTATION),
     ],
 )
-def test_devpipe_stage_follows_control_files(tmp_path, files, stage):
+def test_devpipe_stage_follows_control_files(tmp_path, files, contract_text, stage):
     main = Path("main")
     folder = feature_folder(main, "feat")
-    service, _ = make_service(tmp_path, FakeControlFiles({folder / name for name in files}))
+    texts = {} if contract_text is None else {folder / "design-contract.md": contract_text}
+    service, _ = make_service(tmp_path, FakeControlFiles({folder / name for name in files}, texts))
     assert service.devpipe_stage(TabState("feat", worktrees=[main, Path("other")])) is stage
 
 

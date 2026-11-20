@@ -4,10 +4,11 @@ from pathlib import Path
 from typing import Protocol
 
 from devpipe.models.control_files import (
+    DESIGN_CONTRACT_FILE_NAME,
     FEATURE_SPEC_FILE_NAME,
-    IMPLEMENTATION_LOG_FILE_NAME,
     PLAN_FILE_NAME,
     DevpipeStage,
+    contract_has_open_steps,
     feature_folder,
 )
 from devpipe.models.tab_state import TabState
@@ -18,6 +19,8 @@ class ControlFilesStore(Protocol):
     """Reads control files (implemented in the persistence layer)."""
 
     def file_exists(self, path: Path) -> bool: ...
+
+    def read_text(self, path: Path) -> str | None: ...
 
 
 class SessionService:
@@ -30,7 +33,8 @@ class SessionService:
         `<main worktree>/.devpipe/<feature-name>/` (the main worktree is the first one):
 
         CREATE without `feature-spec.md`, else PLAN without `plan.md`, else STEPS
-        without `implementation-log.md`, else IMPLEMENTATION.
+        when `design-contract.md` is missing (or unreadable) or lists a step whose
+        status is `pending` or `draft`, else IMPLEMENTATION.
         Always CREATE when the tab has no worktree or no feature name.
         """
         if not tab.worktrees or not tab.feature_name:
@@ -39,10 +43,12 @@ class SessionService:
         for file_name, stage in (
             (FEATURE_SPEC_FILE_NAME, DevpipeStage.CREATE),
             (PLAN_FILE_NAME, DevpipeStage.PLAN),
-            (IMPLEMENTATION_LOG_FILE_NAME, DevpipeStage.STEPS),
         ):
             if not self._control_files.file_exists(folder / file_name):
                 return stage
+        contract = self._control_files.read_text(folder / DESIGN_CONTRACT_FILE_NAME)
+        if contract is None or contract_has_open_steps(contract):
+            return DevpipeStage.STEPS
         return DevpipeStage.IMPLEMENTATION
 
     def start_folder(self) -> Path:

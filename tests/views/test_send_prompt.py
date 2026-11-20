@@ -1,4 +1,4 @@
-"""The "Send 'create' prompt" and "Send 'plan' prompt" buttons of the devpipe create panel."""
+"""The "Send 'create' prompt", "Send 'plan' prompt" and "Send 'steps' prompt" buttons of the devpipe create panel."""
 
 from pathlib import Path
 
@@ -32,6 +32,9 @@ class FakeControlFiles:
 
     def file_exists(self, path: Path) -> bool:
         return path in self.existing
+
+    def read_text(self, path: Path) -> str | None:
+        return None  # no design contract: stage STEPS once the plan exists
 
 
 @pytest.fixture
@@ -166,20 +169,37 @@ def test_plan_send_failure_warns(qtbot, plan_tab, fake_terminals, warnings):
     assert panel.send_plan_button.isEnabled()
 
 
+def test_steps_click_brings_the_terminal_to_front_and_types_the_steps_command(
+    qtbot, tab, stage_files, tmp_path, fake_terminals, warnings
+):
+    panel = tab.devpipe_create_panel
+    set_stage(stage_files, tmp_path, DevpipeStage.STEPS)
+    click(qtbot, tab.open_console_button)
+    panel.prompt_input.setPlainText("not sent")  # the steps command carries its own prompt
+    fake_terminals.fronted.clear()
+    click(qtbot, panel.send_steps_button)
+    assert fake_terminals.fronted == [TerminalId("1")]
+    assert fake_terminals.sent == [(TerminalId("1"), "/devpipe-steps feat \n Detail remaining steps", False, True)]
+    assert warnings == []
+
+
 @pytest.mark.parametrize(
-    "stage, create_enabled, plan_enabled",
+    "stage, create_enabled, plan_enabled, steps_enabled",
     [
-        (DevpipeStage.CREATE, True, False),
-        (DevpipeStage.PLAN, False, True),
-        (DevpipeStage.STEPS, False, False),
+        (DevpipeStage.CREATE, True, False, False),
+        (DevpipeStage.PLAN, False, True, False),
+        (DevpipeStage.STEPS, False, False, True),
     ],
 )
-def test_each_button_is_enabled_only_at_its_stage(qtbot, tab, stage_files, tmp_path, stage, create_enabled, plan_enabled):
+def test_each_button_is_enabled_only_at_its_stage(
+    qtbot, tab, stage_files, tmp_path, stage, create_enabled, plan_enabled, steps_enabled
+):
     panel = tab.devpipe_create_panel
     set_stage(stage_files, tmp_path, stage)
     click(qtbot, tab.open_console_button)
     assert panel.send_create_button.isEnabled() is create_enabled
     assert panel.send_plan_button.isEnabled() is plan_enabled
+    assert panel.send_steps_button.isEnabled() is steps_enabled
 
 
 def test_buttons_follow_the_stage_on_refresh(qtbot, tab, stage_files, tmp_path):
