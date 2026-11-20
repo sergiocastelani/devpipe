@@ -26,6 +26,7 @@ PENDING_MARK = " *"
 SEND_CREATE_PROMPT_TEXT = "Send 'create' prompt to terminal"
 SEND_PLAN_PROMPT_TEXT = "Send 'plan' prompt to terminal"
 SEND_STEPS_PROMPT_TEXT = "Send 'steps' prompt to terminal"
+SEND_IMPLEMENTATION_PROMPT_TEXT = "Send 'implementation' prompt to terminal"
 SEND_PROMPT_ERROR_TITLE = "Cannot send prompt"
 TITLE_TEXT = "Create Feature Spec"
 
@@ -43,6 +44,11 @@ def plan_command(feature_name: str) -> str:
 def steps_command(feature_name: str) -> str:
     """The text typed into the terminal by the 'steps' button."""
     return f"/devpipe-steps {feature_name} \n Detail remaining steps"
+
+
+def implementation_command(feature_name: str) -> str:
+    """The text typed into the terminal by the 'implementation' button."""
+    return f"/devpipe-implement {feature_name} \n Implement the next stage"
 
 
 class DevpipeCreatePanel(QWidget):
@@ -64,7 +70,7 @@ class DevpipeCreatePanel(QWidget):
         `tab_terminal` returns the tab's terminal (None when it has none) and `stage`
         the tab's devpipe stage; the send buttons are enabled only while the terminal
         is open and the stage is theirs (CREATE for 'create', PLAN for 'plan', STEPS for
-        'steps'), checked
+        'steps', IMPLEMENTATION for 'implementation'), checked
         when the panel is shown and on update_send_button (the tab calls it after its
         console button opens one)."""
         super().__init__()
@@ -102,6 +108,8 @@ class DevpipeCreatePanel(QWidget):
         self.send_plan_button.clicked.connect(lambda: self.send_plan_prompt())
         self.send_steps_button = QPushButton(SEND_STEPS_PROMPT_TEXT)
         self.send_steps_button.clicked.connect(lambda: self.send_steps_prompt())
+        self.send_implementation_button = QPushButton(SEND_IMPLEMENTATION_PROMPT_TEXT)
+        self.send_implementation_button.clicked.connect(lambda: self.send_implementation_prompt())
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
@@ -110,6 +118,7 @@ class DevpipeCreatePanel(QWidget):
         layout.addWidget(self.send_create_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.send_plan_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.send_steps_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.send_implementation_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self._load_saved_prompt()
         self.update_send_button()
@@ -152,6 +161,10 @@ class DevpipeCreatePanel(QWidget):
         """Types the '/devpipe-steps <feature-name>' command and its prompt into terminal."""
         self._send_to_terminal(steps_command(self._feature_name()))
 
+    def send_implementation_prompt(self) -> None:
+        """Types the '/devpipe-implement <feature-name>' command and its prompt into terminal."""
+        self._send_to_terminal(implementation_command(self._feature_name()))
+
     def _send_to_terminal(self, text: str) -> None:
         """Bring the tab's terminal to the foreground and type the text parameter
         into it, without pressing Enter at the end. Every
@@ -174,12 +187,14 @@ class DevpipeCreatePanel(QWidget):
 
     def update_send_button(self) -> None:
         """Enable a send button only while the tab's terminal is open and the tab is
-        at the button's stage: CREATE for 'create', PLAN for 'plan', STEPS for 'steps'."""
+        at the button's stage: CREATE for 'create', PLAN for 'plan', STEPS for 'steps',
+        IMPLEMENTATION for 'implementation'."""
         terminal_open = self._open_tab_terminal() is not None
         stage = self._stage() if terminal_open else None
         self.send_create_button.setEnabled(stage is DevpipeStage.CREATE)
         self.send_plan_button.setEnabled(stage is DevpipeStage.PLAN)
         self.send_steps_button.setEnabled(stage is DevpipeStage.STEPS)
+        self.send_implementation_button.setEnabled(stage is DevpipeStage.IMPLEMENTATION)
 
     def flush_prompt(self) -> None:
         """Report a pending edit now instead of waiting for the delay; no-op when none is pending."""

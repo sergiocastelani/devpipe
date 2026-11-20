@@ -1,4 +1,5 @@
-"""The "Send 'create' prompt", "Send 'plan' prompt" and "Send 'steps' prompt" buttons of the devpipe create panel."""
+"""The "Send 'create' prompt", "Send 'plan' prompt", "Send 'steps' prompt" and
+"Send 'implementation' prompt" buttons of the devpipe create panel."""
 
 from pathlib import Path
 
@@ -6,7 +7,13 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
-from devpipe.models.control_files import DevpipeStage, FEATURE_SPEC_FILE_NAME, PLAN_FILE_NAME, feature_folder
+from devpipe.models.control_files import (
+    DESIGN_CONTRACT_FILE_NAME,
+    FEATURE_SPEC_FILE_NAME,
+    PLAN_FILE_NAME,
+    DevpipeStage,
+    feature_folder,
+)
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalError, TerminalId
 from devpipe.persistence.config_repository import ConfigRepository
@@ -23,7 +30,10 @@ STAGE_FILES = {
     DevpipeStage.CREATE: (),
     DevpipeStage.PLAN: (FEATURE_SPEC_FILE_NAME,),
     DevpipeStage.STEPS: (FEATURE_SPEC_FILE_NAME, PLAN_FILE_NAME),
+    DevpipeStage.IMPLEMENTATION: (FEATURE_SPEC_FILE_NAME, PLAN_FILE_NAME, DESIGN_CONTRACT_FILE_NAME),
 }
+
+APPROVED_CONTRACT = "| Step | Status |\n|---|---|\n| 01 | approved |\n"
 
 
 class FakeControlFiles:
@@ -34,7 +44,11 @@ class FakeControlFiles:
         return path in self.existing
 
     def read_text(self, path: Path) -> str | None:
-        return None  # no design contract: stage STEPS once the plan exists
+        # A listed design contract has every step approved (stage IMPLEMENTATION);
+        # without one the stage is STEPS once the plan exists.
+        if path.name == DESIGN_CONTRACT_FILE_NAME and path in self.existing:
+            return APPROVED_CONTRACT
+        return None
 
 
 @pytest.fixture
@@ -183,16 +197,33 @@ def test_steps_click_brings_the_terminal_to_front_and_types_the_steps_command(
     assert warnings == []
 
 
+def test_implementation_click_brings_the_terminal_to_front_and_types_the_implement_command(
+    qtbot, tab, stage_files, tmp_path, fake_terminals, warnings
+):
+    panel = tab.devpipe_create_panel
+    set_stage(stage_files, tmp_path, DevpipeStage.IMPLEMENTATION)
+    click(qtbot, tab.open_console_button)
+    panel.prompt_input.setPlainText("not sent")  # the implement command carries its own prompt
+    fake_terminals.fronted.clear()
+    click(qtbot, panel.send_implementation_button)
+    assert fake_terminals.fronted == [TerminalId("1")]
+    assert fake_terminals.sent == [
+        (TerminalId("1"), "/devpipe-implement feat \n Implement the next stage", False, True)
+    ]
+    assert warnings == []
+
+
 @pytest.mark.parametrize(
-    "stage, create_enabled, plan_enabled, steps_enabled",
+    "stage, create_enabled, plan_enabled, steps_enabled, implementation_enabled",
     [
-        (DevpipeStage.CREATE, True, False, False),
-        (DevpipeStage.PLAN, False, True, False),
-        (DevpipeStage.STEPS, False, False, True),
+        (DevpipeStage.CREATE, True, False, False, False),
+        (DevpipeStage.PLAN, False, True, False, False),
+        (DevpipeStage.STEPS, False, False, True, False),
+        (DevpipeStage.IMPLEMENTATION, False, False, False, True),
     ],
 )
 def test_each_button_is_enabled_only_at_its_stage(
-    qtbot, tab, stage_files, tmp_path, stage, create_enabled, plan_enabled, steps_enabled
+    qtbot, tab, stage_files, tmp_path, stage, create_enabled, plan_enabled, steps_enabled, implementation_enabled
 ):
     panel = tab.devpipe_create_panel
     set_stage(stage_files, tmp_path, stage)
@@ -200,6 +231,7 @@ def test_each_button_is_enabled_only_at_its_stage(
     assert panel.send_create_button.isEnabled() is create_enabled
     assert panel.send_plan_button.isEnabled() is plan_enabled
     assert panel.send_steps_button.isEnabled() is steps_enabled
+    assert panel.send_implementation_button.isEnabled() is implementation_enabled
 
 
 def test_buttons_follow_the_stage_on_refresh(qtbot, tab, stage_files, tmp_path):
