@@ -1,7 +1,6 @@
 """Devpipe create panel: opened by "Start Pipeline" on the start panel."""
 
 from collections.abc import Callable
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent
@@ -14,8 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from devpipe.models.control_files import DevpipeStage
 from devpipe.models.terminal import TerminalError, TerminalId
-from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.terminal_service import TerminalService
 
 PROMPT_SAVE_DELAY_MS = 5000
@@ -24,7 +23,8 @@ PROMPT_SAVE_DELAY_MS = 5000
 PENDING_MARK = " *"
 """Appended to the prompt label while an edit is waiting to be reported."""
 
-SEND_PROMPT_TEXT = "Send prompt to terminal"
+SEND_CREATE_PROMPT_TEXT = "Send 'create' prompt to terminal"
+SEND_PLAN_PROMPT_TEXT = "Send 'plan' prompt to terminal"
 SEND_PROMPT_ERROR_TITLE = "Cannot send prompt"
 TITLE_TEXT = "Create Feature Spec"
 
@@ -32,6 +32,11 @@ TITLE_TEXT = "Create Feature Spec"
 def create_command(feature_name: str, prompt: str) -> str:
     """The text typed into the terminal: the '/devpipe-create' command, then the prompt."""
     return f"/devpipe-create {feature_name} \n {prompt}"
+
+
+def plan_command(feature_name: str) -> str:
+    """The text typed into the terminal by the 'plan' button."""
+    return f"/devpipe-plan {feature_name}"
 
 
 class DevpipeCreatePanel(QWidget):
@@ -42,34 +47,25 @@ class DevpipeCreatePanel(QWidget):
     def __init__(
         self,
         terminals: TerminalService,
-        worktrees: Callable[[], list[Path]],
         feature_name: Callable[[], str],
         saved_prompt: Callable[[], str],
         tab_terminal: Callable[[], TerminalId | None],
-        control_files: ControlFilesService,
-        open_plan_panel: Callable[[], None],
+        stage: Callable[[], DevpipeStage],
     ) -> None:
-        """`worktrees` returns the tab's current worktree list; the feature spec is
-        looked for in its first entry.
-
-        `feature_name` and `saved_prompt` return the tab's feature name and its kept
+        """`feature_name` and `saved_prompt` return the tab's feature name and its kept
         prompt; they are read each time the panel is shown.
 
-        `tab_terminal` returns the tab's terminal (None when it has none); the send
-        button is enabled only while it is open, checked when the panel is shown
-        and on update_send_button (the tab calls it after its console button opens one).
-
-        `control_files` tells whether the feature spec (`.devpipe/<feature-name>/feature-spec.md`)
-        exists in the first worktree; refresh_state checks it and, when it exists, calls
-        `open_plan_panel` (deferred to the event loop, see refresh_state)."""
+        `tab_terminal` returns the tab's terminal (None when it has none) and `stage`
+        the tab's devpipe stage; the send buttons are enabled only while the terminal
+        is open and the stage is theirs (CREATE for 'create', PLAN for 'plan'), checked
+        when the panel is shown and on update_send_button (the tab calls it after its
+        console button opens one)."""
         super().__init__()
-        self._worktrees = worktrees
         self._feature_name = feature_name
         self._saved_prompt = saved_prompt
         self._terminals = terminals
         self._tab_terminal = tab_terminal
-        self._control_files = control_files
-        self._open_plan_panel = open_plan_panel
+        self._stage = stage
 
         self.title_label = QLabel(TITLE_TEXT)
         title_font = self.title_label.font()
@@ -93,32 +89,30 @@ class DevpipeCreatePanel(QWidget):
         self._save_timer.timeout.connect(self._report_prompt)
         self.prompt_input.textChanged.connect(self._start_save_timer)
 
-        self.send_prompt_button = QPushButton(SEND_PROMPT_TEXT)
-        self.send_prompt_button.clicked.connect(lambda: self.send_prompt())  # drop the `checked` argument
+        self.send_create_button = QPushButton(SEND_CREATE_PROMPT_TEXT)
+        self.send_create_button.clicked.connect(lambda: self.send_create_prompt())  # drop the `checked` argument
+        self.send_plan_button = QPushButton(SEND_PLAN_PROMPT_TEXT)
+        self.send_plan_button.clicked.connect(lambda: self.send_plan_prompt())
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.title_label)
         layout.addWidget(self.prompt_label)
         layout.addWidget(self.prompt_input, stretch=1)  # capped at half the panel in resizeEvent
-        layout.addWidget(self.send_prompt_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.send_create_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.send_plan_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
         self._load_saved_prompt()
         self.update_send_button()
 
     def refresh_state(self) -> None:
         """Bring the panel up to date with the tab: the kept prompt (see
-        _load_saved_prompt), the send button, and the feature spec, calling
-        open_plan_panel when `<first worktree>/.devpipe/<feature-name>/feature-spec.md`
-        exists. Called on show (not on a window restore) and by the tab's Refresh button.
+        _load_saved_prompt) and the send buttons. Called on show (not on a window
+        restore) and by the tab's Refresh button.
 
         A pending prompt edit is reported first, so a refresh never drops it."""
         self.flush_prompt()
         self._load_saved_prompt()
         self.update_send_button()
-        folder = self._first_worktree()
-        if folder is not None and self._control_files.feature_spec_exists(folder, self._feature_name()):
-            # Deferred: on show, the stack is still switching to this panel.
-            QTimer.singleShot(0, self._open_plan_panel)
 
     def _load_saved_prompt(self) -> None:
         """Show the label for the tab's feature name and put the tab's kept prompt in
@@ -136,15 +130,21 @@ class DevpipeCreatePanel(QWidget):
         finally:
             self.prompt_input.blockSignals(False)
 
-    def send_prompt(self) -> None:
-        """Bring the tab's terminal to the foreground and type the '/devpipe-create'
-        command and the prompt into it, without pressing Enter at the end. Every
-        line break is typed as Ctrl+J (new line, not submit), so the agent gets one multi-line message.
+    def send_create_prompt(self) -> None:
+        """Types the '/devpipe-create' command and the prompt into terminal."""
+        self._send_to_terminal(create_command(self._feature_name(), self.prompt_input.toPlainText()))
 
+    def send_plan_prompt(self) -> None:
+        """Types the '/devpipe-plan <feature-name>' command into terminal."""
+        self._send_to_terminal(plan_command(self._feature_name()))
+
+    def _send_to_terminal(self, text: str) -> None:
+        """Bring the tab's terminal to the foreground and type the text parameter
+        into it, without pressing Enter at the end. Every
+        line break is typed as Ctrl+J (new line, not submit).
         On failure shows a warning; the button state is refreshed either way."""
         terminal = self._open_tab_terminal()
         if terminal is not None:
-            text = create_command(self._feature_name(), self.prompt_input.toPlainText())
             try:
                 self._terminals.send_to_console(terminal, text, enter=False, soft_newlines=True)
             except TerminalError as error:
@@ -159,8 +159,12 @@ class DevpipeCreatePanel(QWidget):
         return terminal
 
     def update_send_button(self) -> None:
-        """Enable the send button only while the tab's terminal is open."""
-        self.send_prompt_button.setEnabled(self._open_tab_terminal() is not None)
+        """Enable a send button only while the tab's terminal is open and the tab is
+        at the button's stage: CREATE for 'create', PLAN for 'plan'."""
+        terminal_open = self._open_tab_terminal() is not None
+        stage = self._stage() if terminal_open else None
+        self.send_create_button.setEnabled(stage is DevpipeStage.CREATE)
+        self.send_plan_button.setEnabled(stage is DevpipeStage.PLAN)
 
     def flush_prompt(self) -> None:
         """Report a pending edit now instead of waiting for the delay; no-op when none is pending."""
@@ -197,7 +201,3 @@ class DevpipeCreatePanel(QWidget):
         # A maximum (not a fixed) height, so the panel can still shrink.
         self.prompt_input.setMaximumHeight(event.size().height() // 2)
         super().resizeEvent(event)
-
-    def _first_worktree(self) -> Path | None:
-        paths = self._worktrees()
-        return paths[0] if paths else None

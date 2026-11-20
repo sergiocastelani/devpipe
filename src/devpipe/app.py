@@ -14,7 +14,6 @@ from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.persistence.tab_state_repository import TabStateRepository
-from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
@@ -40,7 +39,6 @@ def main() -> int:
         WorktreeService(SubprocessGitWorktrees()),
         SkillsService(SkillsFiles(), SKILLS_FOLDER),
         TerminalService(WindowsTerminals()),
-        ControlFilesService(ControlFiles()),
     )
     window.show_initial()
     return app.exec()

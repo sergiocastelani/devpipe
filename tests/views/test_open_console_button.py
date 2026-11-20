@@ -6,15 +6,16 @@ from PySide6.QtWidgets import QMessageBox
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalError, TerminalId
+from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
-from devpipe.services.control_files_service import ControlFilesService
+from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.views.open_console_button import OpenConsoleButton
 from devpipe.views.pipeline_tab import PipelineTab
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))  # never installed in these tests
-UNUSED_CONTROL_FILES = ControlFilesService(ControlFiles())  # no feature spec in these tests
+UNUSED_SESSION = SessionService(ConfigRepository(Path("unused-config.json")), ControlFiles())  # no feature spec: stage CREATE
 
 
 @pytest.fixture
@@ -103,7 +104,7 @@ def test_open_failure_warns(qtbot, terminal_service, fake_terminals, tmp_path, w
 
 
 def make_tab(qtbot, tab_states, worktree_service, terminal_service):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, UNUSED_CONTROL_FILES)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, UNUSED_SESSION)
     qtbot.addWidget(tab)
     return tab
 

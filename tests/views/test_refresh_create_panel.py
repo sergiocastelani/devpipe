@@ -1,5 +1,5 @@
-"""The devpipe create panel's refresh: the Refresh button and showing the panel
-move the tab on to the devpipe plan panel once `.devpipe/<feature-name>/feature-spec.md` exists."""
+"""The devpipe create panel's refresh: the Refresh button and showing the panel keep
+the tab on the create panel, also once `.devpipe/<feature-name>/feature-spec.md` exists."""
 
 import json
 from pathlib import Path
@@ -9,11 +9,15 @@ from PySide6.QtCore import Qt
 
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalId
+from devpipe.persistence.config_repository import ConfigRepository
+from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
+from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.views.pipeline_tab import PipelineTab
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))
+SESSION = SessionService(ConfigRepository(Path("unused-config.json")), ControlFiles())  # stage from the real files
 WAIT_MS = 2000
 
 
@@ -25,9 +29,9 @@ def worktree(tmp_path) -> Path:
 
 
 @pytest.fixture
-def make_tab(qtbot, tab_states, worktree_service, terminal_service, control_files, tmp_path, worktree):
+def make_tab(qtbot, tab_states, worktree_service, terminal_service, tmp_path, worktree):
     def make(active_panel=Panel.START):
-        tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, control_files)
+        tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, SESSION)
         qtbot.addWidget(tab)
         tab.show()  # show events only reach visible widgets
         tab.apply_saved(tmp_path / "x.json", TabState("feat", active_panel, [worktree], "build it"))
@@ -50,36 +54,21 @@ def click(qtbot, button):
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
-def test_refresh_without_the_spec_stays_on_the_create_panel(qtbot, make_tab, worktree):
+def test_refresh_with_the_spec_stays_on_the_create_panel(qtbot, make_tab, worktree, tmp_path):
     tab = make_tab()
     tab.show_panel(Panel.DEVPIPE_CREATE)
-    make_feature_folder(worktree)  # the folder alone is not enough
+    make_feature_spec(worktree)
     click(qtbot, tab.refresh_button)
     qtbot.wait(50)  # let a queued switch run, if any
-    assert tab.active_panel is Panel.DEVPIPE_CREATE
+    assert tab.stack.currentWidget() is tab.devpipe_create_panel
+    assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8"))["active_panel"] == "devpipe-create"
 
 
-def test_refresh_with_the_spec_shows_the_plan_panel_and_saves_it(qtbot, make_tab, worktree, tmp_path):
-    tab = make_tab()
-    tab.show_panel(Panel.DEVPIPE_CREATE)
-    make_feature_spec(worktree)
-    click(qtbot, tab.refresh_button)
-    qtbot.waitUntil(lambda: tab.active_panel is Panel.DEVPIPE_PLAN, timeout=WAIT_MS)
-    assert tab.stack.currentWidget() is tab.devpipe_plan_panel
-    assert json.loads((tmp_path / "x.json").read_text(encoding="utf-8"))["active_panel"] == "devpipe-plan"
-
-
-def test_showing_the_create_panel_with_the_spec_shows_the_plan_panel(qtbot, make_tab, worktree):
-    tab = make_tab()
-    make_feature_spec(worktree)
-    tab.show_panel(Panel.DEVPIPE_CREATE)
-    qtbot.waitUntil(lambda: tab.active_panel is Panel.DEVPIPE_PLAN, timeout=WAIT_MS)
-
-
-def test_restoring_a_tab_on_the_create_panel_with_the_spec_shows_the_plan_panel(qtbot, make_tab, worktree):
+def test_restoring_a_tab_on_the_create_panel_with_the_spec_stays_on_it(qtbot, make_tab, worktree):
     make_feature_spec(worktree)
     tab = make_tab(Panel.DEVPIPE_CREATE)
-    qtbot.waitUntil(lambda: tab.active_panel is Panel.DEVPIPE_PLAN, timeout=WAIT_MS)
+    qtbot.wait(50)
+    assert tab.stack.currentWidget() is tab.devpipe_create_panel
 
 
 def test_refresh_keeps_a_pending_prompt_edit(qtbot, make_tab, tmp_path):
@@ -97,10 +86,12 @@ def test_refresh_updates_the_send_button(qtbot, make_tab, fake_terminals):
     tab.show_panel(Panel.DEVPIPE_CREATE)
     panel = tab.devpipe_create_panel
     click(qtbot, tab.open_console_button)
-    assert panel.send_prompt_button.isEnabled()
+    assert panel.send_create_button.isEnabled()
+    assert not panel.send_plan_button.isEnabled()  # no feature spec: stage CREATE
     fake_terminals.closed.add(TerminalId("1"))
     click(qtbot, tab.refresh_button)
-    assert not panel.send_prompt_button.isEnabled()
+    assert not panel.send_create_button.isEnabled()
+    assert not panel.send_plan_button.isEnabled()
 
 
 def test_refresh_only_refreshes_the_active_panel(qtbot, make_tab, worktree):

@@ -11,7 +11,6 @@ from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
 from devpipe.persistence.tab_state_repository import TabStateRepository
-from devpipe.services.control_files_service import ControlFilesService
 from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.services.tab_state_service import TabStateService
@@ -134,13 +133,7 @@ def worktree_service(fake_git) -> WorktreeService:
 
 
 @pytest.fixture
-def control_files() -> ControlFilesService:
-    """The real control files service: tests create feature specs under tmp_path."""
-    return ControlFilesService(ControlFiles())
-
-
-@pytest.fixture
-def make_window(qtbot, tmp_path, tab_states, worktree_service, terminal_service, control_files) -> Callable[[], MainWindow]:
+def make_window(qtbot, tmp_path, tab_states, worktree_service, terminal_service) -> Callable[[], MainWindow]:
     """Return a callable building a new MainWindow with real repositories on
     tmp_path / "config.json" (same file on every call: a second call simulates a
     restart). Each window is registered with qtbot.addWidget."""
@@ -154,7 +147,6 @@ def make_window(qtbot, tmp_path, tab_states, worktree_service, terminal_service,
             worktree_service,
             SkillsService(SkillsFiles(), tmp_path / "ai-skills"),  # skills flow: test_install_skills.py
             terminal_service,
-            control_files,
         )
         qtbot.addWidget(window)
         return window

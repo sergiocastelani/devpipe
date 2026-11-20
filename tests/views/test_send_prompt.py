@@ -1,4 +1,4 @@
-"""The "Send prompt to terminal" button of the devpipe create panel."""
+"""The "Send 'create' prompt" and "Send 'plan' prompt" buttons of the devpipe create panel."""
 
 from pathlib import Path
 
@@ -6,16 +6,32 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
+from devpipe.models.control_files import DevpipeStage, FEATURE_SPEC_FILE_NAME, PLAN_FILE_NAME, feature_folder
 from devpipe.models.tab_state import Panel, TabState
 from devpipe.models.terminal import TerminalError, TerminalId
+from devpipe.persistence.config_repository import ConfigRepository
 from devpipe.persistence.control_files import ControlFiles
 from devpipe.persistence.skills_files import SkillsFiles
-from devpipe.services.control_files_service import ControlFilesService
+from devpipe.services.session_service import SessionService
 from devpipe.services.skills_service import SkillsService
 from devpipe.views.pipeline_tab import PipelineTab
 
 UNUSED_SKILLS = SkillsService(SkillsFiles(), Path("ai-skills"))
-UNUSED_CONTROL_FILES = ControlFilesService(ControlFiles())  # no feature spec in these tests
+
+# The control files each stage needs; only the session (the stage) sees them.
+STAGE_FILES = {
+    DevpipeStage.CREATE: (),
+    DevpipeStage.PLAN: (FEATURE_SPEC_FILE_NAME,),
+    DevpipeStage.STEPS: (FEATURE_SPEC_FILE_NAME, PLAN_FILE_NAME),
+}
+
+
+class FakeControlFiles:
+    def __init__(self) -> None:
+        self.existing: set[Path] = set()
+
+    def file_exists(self, path: Path) -> bool:
+        return path in self.existing
 
 
 @pytest.fixture
@@ -26,12 +42,31 @@ def warnings(monkeypatch):
 
 
 @pytest.fixture
-def tab(qtbot, tab_states, worktree_service, terminal_service, tmp_path):
-    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, UNUSED_CONTROL_FILES)
+def stage_files(tmp_path):
+    """Control files seen by the tab's session; call set_stage to move the tab's stage."""
+    return FakeControlFiles()
+
+
+def set_stage(stage_files, worktree, stage):
+    folder = feature_folder(worktree, "feat")
+    stage_files.existing = {folder / name for name in STAGE_FILES[stage]}
+
+
+@pytest.fixture
+def tab(qtbot, tab_states, worktree_service, terminal_service, tmp_path, stage_files):
+    session = SessionService(ConfigRepository(tmp_path / "config.json"), stage_files)
+    tab = PipelineTab(tab_states, worktree_service, UNUSED_SKILLS, terminal_service, session)
     qtbot.addWidget(tab)
     tab.show()  # show events only reach visible widgets
     tab.apply_saved(tmp_path / "x.json", TabState("feat", Panel.START, [tmp_path], "build it"))
     tab.show_panel(Panel.DEVPIPE_CREATE)
+    return tab
+
+
+@pytest.fixture
+def plan_tab(tab, stage_files, tmp_path):
+    """The tab at the PLAN stage (feature spec written, no plan yet)."""
+    set_stage(stage_files, tmp_path, DevpipeStage.PLAN)
     return tab
 
 
@@ -41,9 +76,9 @@ def click(qtbot, button):
 
 def test_disabled_until_the_console_button_opens_a_terminal(qtbot, tab):
     panel = tab.devpipe_create_panel
-    assert not panel.send_prompt_button.isEnabled()
+    assert not panel.send_create_button.isEnabled()
     click(qtbot, tab.open_console_button)
-    assert panel.send_prompt_button.isEnabled()
+    assert panel.send_create_button.isEnabled()
 
 
 def test_state_is_refreshed_when_the_panel_is_shown(qtbot, tab, fake_terminals):
@@ -52,14 +87,14 @@ def test_state_is_refreshed_when_the_panel_is_shown(qtbot, tab, fake_terminals):
     tab.show_panel(Panel.START)
     fake_terminals.closed.add(TerminalId("1"))
     tab.show_panel(Panel.DEVPIPE_CREATE)
-    assert not panel.send_prompt_button.isEnabled()
+    assert not panel.send_create_button.isEnabled()
 
 
 def test_console_button_failure_keeps_it_disabled(qtbot, tab, fake_terminals, warnings):
     fake_terminals.open_error = TerminalError("boom")
     panel = tab.devpipe_create_panel
     click(qtbot, tab.open_console_button)
-    assert not panel.send_prompt_button.isEnabled()
+    assert not panel.send_create_button.isEnabled()
 
 
 def test_click_brings_the_terminal_to_front_and_types_the_command(qtbot, tab, fake_terminals, warnings):
@@ -67,7 +102,7 @@ def test_click_brings_the_terminal_to_front_and_types_the_command(qtbot, tab, fa
     click(qtbot, tab.open_console_button)
     panel.prompt_input.setPlainText("line 1\nline 2")  # the current text, even before it is saved
     fake_terminals.fronted.clear()
-    click(qtbot, panel.send_prompt_button)
+    click(qtbot, panel.send_create_button)
     assert fake_terminals.fronted == [TerminalId("1")]
     assert fake_terminals.sent == [(TerminalId("1"), "/devpipe-create feat \n line 1\nline 2", False, True)]
     assert warnings == []
@@ -77,15 +112,80 @@ def test_terminal_closed_before_the_click_disables_without_sending(qtbot, tab, f
     panel = tab.devpipe_create_panel
     click(qtbot, tab.open_console_button)
     fake_terminals.closed.add(TerminalId("1"))
-    panel.send_prompt()
+    panel.send_create_prompt()
     assert fake_terminals.sent == []
-    assert not panel.send_prompt_button.isEnabled()
+    assert not panel.send_create_button.isEnabled()
 
 
 def test_send_failure_warns(qtbot, tab, fake_terminals, warnings):
     panel = tab.devpipe_create_panel
     click(qtbot, tab.open_console_button)
     fake_terminals.send_error = TerminalError("write failed: boom")
-    click(qtbot, panel.send_prompt_button)
+    click(qtbot, panel.send_create_button)
     assert "boom" in warnings[0][1]
-    assert panel.send_prompt_button.isEnabled()
+    assert panel.send_create_button.isEnabled()
+
+
+def test_plan_button_is_disabled_until_the_console_button_opens_a_terminal(qtbot, plan_tab):
+    tab = plan_tab
+    panel = tab.devpipe_create_panel
+    assert not panel.send_plan_button.isEnabled()
+    click(qtbot, tab.open_console_button)
+    assert panel.send_plan_button.isEnabled()
+
+
+def test_plan_click_brings_the_terminal_to_front_and_types_the_plan_command(qtbot, plan_tab, fake_terminals, warnings):
+    tab = plan_tab
+    panel = tab.devpipe_create_panel
+    click(qtbot, tab.open_console_button)
+    panel.prompt_input.setPlainText("not sent")  # the plan command carries no prompt
+    fake_terminals.fronted.clear()
+    click(qtbot, panel.send_plan_button)
+    assert fake_terminals.fronted == [TerminalId("1")]
+    assert fake_terminals.sent == [(TerminalId("1"), "/devpipe-plan feat", False, True)]
+    assert warnings == []
+
+
+def test_plan_terminal_closed_before_the_click_disables_without_sending(qtbot, plan_tab, fake_terminals, warnings):
+    tab = plan_tab
+    panel = tab.devpipe_create_panel
+    click(qtbot, tab.open_console_button)
+    fake_terminals.closed.add(TerminalId("1"))
+    panel.send_plan_prompt()
+    assert fake_terminals.sent == []
+    assert not panel.send_plan_button.isEnabled()
+
+
+def test_plan_send_failure_warns(qtbot, plan_tab, fake_terminals, warnings):
+    tab = plan_tab
+    panel = tab.devpipe_create_panel
+    click(qtbot, tab.open_console_button)
+    fake_terminals.send_error = TerminalError("write failed: boom")
+    click(qtbot, panel.send_plan_button)
+    assert "boom" in warnings[0][1]
+    assert panel.send_plan_button.isEnabled()
+
+
+@pytest.mark.parametrize(
+    "stage, create_enabled, plan_enabled",
+    [
+        (DevpipeStage.CREATE, True, False),
+        (DevpipeStage.PLAN, False, True),
+        (DevpipeStage.STEPS, False, False),
+    ],
+)
+def test_each_button_is_enabled_only_at_its_stage(qtbot, tab, stage_files, tmp_path, stage, create_enabled, plan_enabled):
+    panel = tab.devpipe_create_panel
+    set_stage(stage_files, tmp_path, stage)
+    click(qtbot, tab.open_console_button)
+    assert panel.send_create_button.isEnabled() is create_enabled
+    assert panel.send_plan_button.isEnabled() is plan_enabled
+
+
+def test_buttons_follow_the_stage_on_refresh(qtbot, tab, stage_files, tmp_path):
+    panel = tab.devpipe_create_panel
+    click(qtbot, tab.open_console_button)
+    set_stage(stage_files, tmp_path, DevpipeStage.PLAN)
+    click(qtbot, tab.refresh_button)
+    assert not panel.send_create_button.isEnabled()
+    assert panel.send_plan_button.isEnabled()

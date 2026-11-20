@@ -1,6 +1,7 @@
 """Remember where state files live between sessions."""
 
 from pathlib import Path
+from typing import Protocol
 
 from devpipe.models.control_files import (
     FEATURE_SPEC_FILE_NAME,
@@ -10,8 +11,13 @@ from devpipe.models.control_files import (
     feature_folder,
 )
 from devpipe.models.tab_state import TabState
-from devpipe.services.control_files_service import ControlFilesStore
 from devpipe.services.window_state_service import ConfigStore
+
+
+class ControlFilesStore(Protocol):
+    """Reads control files (implemented in the persistence layer)."""
+
+    def file_exists(self, path: Path) -> bool: ...
 
 
 class SessionService:
